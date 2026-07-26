@@ -76,7 +76,7 @@ app.post('/people', async (req, res) => {
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
-    console.error('Detailed error:', err);  // <-- Add this line
+    console.error('Detailed error:', err);
     res.status(500).json({ error: 'Failed to create person' });
   }
 });
@@ -232,6 +232,167 @@ app.patch('/relationships/:id', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to update relationship' });
+  }
+});
+
+// ============ GAP DETECTION ROUTES ============
+
+// GET /gaps - Detect missing information
+app.get('/gaps', async (req, res) => {
+  try {
+    // Query for missing birth_date
+    const missingBirthDate = await pool.query(`
+      SELECT 
+        p.id as person_id,
+        'birth_date' as field_name,
+        p.first_name,
+        p.last_name,
+        p.birth_date
+      FROM people p
+      LEFT JOIN person_field_status pfs 
+        ON p.id = pfs.person_id 
+        AND pfs.field_name = 'birth_date'
+        AND pfs.status = 'unknown_confirmed'
+      WHERE p.birth_date IS NULL
+        AND pfs.id IS NULL
+    `);
+
+    // Query for missing birth_place
+    const missingBirthPlace = await pool.query(`
+      SELECT 
+        p.id as person_id,
+        'birth_place' as field_name,
+        p.first_name,
+        p.last_name,
+        p.birth_place
+      FROM people p
+      LEFT JOIN person_field_status pfs 
+        ON p.id = pfs.person_id 
+        AND pfs.field_name = 'birth_place'
+        AND pfs.status = 'unknown_confirmed'
+      WHERE p.birth_place IS NULL
+        AND pfs.id IS NULL
+    `);
+
+    // Query for missing death_date - ONLY if death_place is already filled (person is known deceased)
+    const missingDeathDate = await pool.query(`
+      SELECT 
+        p.id as person_id,
+        'death_date' as field_name,
+        p.first_name,
+        p.last_name,
+        p.death_date
+      FROM people p
+      LEFT JOIN person_field_status pfs 
+        ON p.id = pfs.person_id 
+        AND pfs.field_name = 'death_date'
+        AND pfs.status = 'unknown_confirmed'
+      WHERE p.death_date IS NULL
+        AND p.death_place IS NOT NULL
+        AND pfs.id IS NULL
+    `);
+
+    // Query for missing death_place - ONLY if death_date is already filled (person is known deceased)
+    const missingDeathPlace = await pool.query(`
+      SELECT 
+        p.id as person_id,
+        'death_place' as field_name,
+        p.first_name,
+        p.last_name,
+        p.death_place
+      FROM people p
+      LEFT JOIN person_field_status pfs 
+        ON p.id = pfs.person_id 
+        AND pfs.field_name = 'death_place'
+        AND pfs.status = 'unknown_confirmed'
+      WHERE p.death_place IS NULL
+        AND p.death_date IS NOT NULL
+        AND pfs.id IS NULL
+    `);
+
+    // Combine all gaps
+    const gaps = [
+      ...missingBirthDate.rows,
+      ...missingBirthPlace.rows,
+      ...missingDeathDate.rows,
+      ...missingDeathPlace.rows
+    ];
+
+    // Add full_name for display
+    const formattedGaps = gaps.map(gap => ({
+      person_id: gap.person_id,
+      field_name: gap.field_name,
+      full_name: `${gap.first_name || ''} ${gap.last_name || ''}`.trim() || 'Unnamed',
+      current_value: gap[gap.field_name] // Shows the current NULL/empty value
+    }));
+
+    res.json(formattedGaps);
+  } catch (err) {
+    console.error('Error detecting gaps:', err);
+    res.status(500).json({ error: 'Failed to detect gaps' });
+  }
+});
+
+// POST /person-field-status - Mark a field as unknown_confirmed or pending
+app.post('/person-field-status', async (req, res) => {
+  try {
+    const { person_id, field_name, status } = req.body;
+
+    // Validate inputs
+    if (!person_id || !field_name || !status) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: person_id, field_name, status' 
+      });
+    }
+
+    if (!['pending', 'unknown_confirmed'].includes(status)) {
+      return res.status(400).json({ 
+        error: 'Status must be "pending" or "unknown_confirmed"' 
+      });
+    }
+
+    // Validate field_name is one we track
+    const validFields = ['birth_date', 'birth_place', 'death_date', 'death_place'];
+    if (!validFields.includes(field_name)) {
+      return res.status(400).json({ 
+        error: `field_name must be one of: ${validFields.join(', ')}` 
+      });
+    }
+
+    // Upsert: insert or update on conflict
+    const result = await pool.query(`
+      INSERT INTO person_field_status (person_id, field_name, status)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (person_id, field_name) 
+      DO UPDATE SET 
+        status = EXCLUDED.status,
+        updated_at = NOW()
+      RETURNING *
+    `, [person_id, field_name, status]);
+
+    res.json({ 
+      success: true, 
+      message: `Field '${field_name}' set to '${status}' for person ${person_id}`,
+      record: result.rows[0]
+    });
+  } catch (err) {
+    console.error('Error updating person field status:', err);
+    res.status(500).json({ error: 'Failed to update field status' });
+  }
+});
+
+// GET /person-field-status/:person_id - Get all field statuses for a person
+app.get('/person-field-status/:person_id', async (req, res) => {
+  try {
+    const { person_id } = req.params;
+    const result = await pool.query(
+      'SELECT field_name, status, created_at, updated_at FROM person_field_status WHERE person_id = $1',
+      [person_id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching field statuses:', err);
+    res.status(500).json({ error: 'Failed to fetch field statuses' });
   }
 });
 
