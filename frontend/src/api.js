@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:5000';
+const API_URL = 'https://family-tree-451bc6a6r-biohazard-xc.vercel.app';
 
 export const getPeople = async () => {
   const response = await fetch(`${API_URL}/people`);
