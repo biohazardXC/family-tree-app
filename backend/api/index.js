@@ -6,9 +6,14 @@ const pool = require('../db');
 const app = express();
 const port = process.env.PORT || 5000;
 
-// Middleware
+/// Middleware
 app.use(cors({
-  origin: ['https://family-tree-app-ps9p.vercel.app', 'http://localhost:5173'],
+  origin: [
+    'https://family-tree-app-frontend.vercel.app',
+    'https://family-tree-app-ps9p.vercel.app',
+    'http://localhost:5173',
+    /\.vercel\.app$/
+  ],
   credentials: true
 }));
 app.use(express.json());
