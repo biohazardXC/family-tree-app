@@ -1,3 +1,4 @@
+// Use the backend URL for all API calls
 const API_URL = 'https://family-tree-app-eta-blond.vercel.app';
 
 export const getPeople = async () => {
