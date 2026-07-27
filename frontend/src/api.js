@@ -1,8 +1,7 @@
-// Use the backend URL for all API calls
 const API_URL = 'https://family-tree-app-backend.vercel.app';
 
 export const getPeople = async () => {
-  const response = await fetch(`${API_URL}/api/people`);
+  const response = await fetch(`${API_URL}/people`);
   if (!response.ok) {
     throw new Error('Failed to fetch people');
   }
@@ -17,7 +16,6 @@ export const getRelationships = async () => {
   return response.json();
 };
 
-// Get all gaps
 export const getGaps = async () => {
   const response = await fetch(`${API_URL}/gaps`);
   if (!response.ok) {
@@ -26,7 +24,6 @@ export const getGaps = async () => {
   return response.json();
 };
 
-// Mark a field as unknown_confirmed or pending
 export const updateFieldStatus = async (personId, fieldName, status) => {
   const response = await fetch(`${API_URL}/person-field-status`, {
     method: 'POST',
@@ -45,7 +42,6 @@ export const updateFieldStatus = async (personId, fieldName, status) => {
   return response.json();
 };
 
-// Get field statuses for a person
 export const getPersonFieldStatuses = async (personId) => {
   const response = await fetch(`${API_URL}/person-field-status/${personId}`);
   if (!response.ok) {
