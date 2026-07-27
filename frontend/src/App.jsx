@@ -159,73 +159,75 @@ function App() {
       )}
 
       {activeTab === 'review' && (
-        <>
-          <h2>Review Queue ({submissions.length} pending)</h2>
-          {submissions.length === 0 ? (
-            <p className="no-submissions">✅ No pending submissions to review.</p>
-          ) : (
-            <div className="submissions-list">
-              {submissions.map(submission => (
-                <div key={submission.id} className="submission-card">
-                  <div className="submission-header">
-                    <h3>Submission #{submission.id}</h3>
-                    <span className="submission-meta">
-                      From: {submission.submitted_by_name} ({submission.submitted_by_email})
-                    </span>
-                    <span className="submission-meta">
-                      Submitted: {new Date(submission.submitted_at).toLocaleString()}
-                    </span>
-                    <span className="submission-meta">
-                      Items: {submission.item_count}
-                    </span>
-                  </div>
-                  <div className="submission-items">
-                    {submission.items && submission.items.map(item => (
-                      <div key={item.id} className="submission-item">
-                        <div className="item-info">
-                          <span className="item-type">{item.target_type.replace('_', ' ')}</span>
-                          {item.target_person_id && (
-                            <span className="item-target">Person ID: {item.target_person_id}</span>
-                          )}
-                          {item.conflict_flag && (
-                            <span className="item-conflict">⚠️ Conflict Detected</span>
-                          )}
-                        </div>
-                        <div className="item-data">
-                          <pre>{JSON.stringify(item.proposed_data, null, 2)}</pre>
-                        </div>
-                        <div className="item-actions">
-                          <button
-                            className="btn btn-accept"
-                            onClick={() => handleReviewItem(item.id, 'accepted')}
-                            disabled={reviewing[item.id]}
-                          >
-                            {reviewing[item.id] ? 'Processing...' : '✅ Accept'}
-                          </button>
-                          <button
-                            className="btn btn-reject"
-                            onClick={() => handleReviewItem(item.id, 'rejected')}
-                            disabled={reviewing[item.id]}
-                          >
-                            {reviewing[item.id] ? 'Processing...' : '❌ Reject'}
-                          </button>
-                          <button
-                            className="btn btn-merge"
-                            onClick={() => handleReviewItem(item.id, 'merged_with_edits')}
-                            disabled={reviewing[item.id]}
-                          >
-                            {reviewing[item.id] ? 'Processing...' : '✏️ Merge with Edits'}
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
+  <>
+    <h2>Review Queue ({submissions.length} pending)</h2>
+    {submissions.length === 0 ? (
+      <p className="no-submissions">✅ No pending submissions to review.</p>
+    ) : (
+      <div className="submissions-list">
+        {submissions.map(submission => (
+          <div key={submission.id} className="submission-card">
+            <div className="submission-header">
+              <h3>Submission #{submission.id}</h3>
+              <span className="submission-meta">
+                From: {submission.submitted_by_name} ({submission.submitted_by_email})
+              </span>
+              <span className="submission-meta">
+                Submitted: {new Date(submission.submitted_at).toLocaleString()}
+              </span>
+              <span className="submission-meta">
+                Items: {submission.items ? submission.items.filter(item => !item.resolution).length : 0}
+              </span>
             </div>
-          )}
-        </>
-      )}
+            <div className="submission-items">
+              {submission.items && submission.items
+                .filter(item => !item.resolution) // ✅ Only show unresolved items
+                .map(item => (
+                  <div key={item.id} className="submission-item">
+                    <div className="item-info">
+                      <span className="item-type">{item.target_type.replace('_', ' ')}</span>
+                      {item.target_person_id && (
+                        <span className="item-target">Person ID: {item.target_person_id}</span>
+                      )}
+                      {item.conflict_flag && (
+                        <span className="item-conflict">⚠️ Conflict Detected</span>
+                      )}
+                    </div>
+                    <div className="item-data">
+                      <pre>{JSON.stringify(item.proposed_data, null, 2)}</pre>
+                    </div>
+                    <div className="item-actions">
+                      <button
+                        className="btn btn-accept"
+                        onClick={() => handleReviewItem(item.id, 'accepted')}
+                        disabled={reviewing[item.id]}
+                      >
+                        {reviewing[item.id] ? 'Processing...' : '✅ Accept'}
+                      </button>
+                      <button
+                        className="btn btn-reject"
+                        onClick={() => handleReviewItem(item.id, 'rejected')}
+                        disabled={reviewing[item.id]}
+                      >
+                        {reviewing[item.id] ? 'Processing...' : '❌ Reject'}
+                      </button>
+                      <button
+                        className="btn btn-merge"
+                        onClick={() => handleReviewItem(item.id, 'merged_with_edits')}
+                        disabled={reviewing[item.id]}
+                      >
+                        {reviewing[item.id] ? 'Processing...' : '✏️ Merge with Edits'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    )}
+  </>
+)}
     </div>
   );
 }
