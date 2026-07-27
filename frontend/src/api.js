@@ -52,9 +52,8 @@ export const getPersonFieldStatuses = async (personId) => {
 
 // ============ SUBMISSION API FUNCTIONS ============
 
-// Get all pending submissions
 export const getPendingSubmissions = async () => {
-  const response = await fetch(`${API_URL}/submissions/pending`);
+  const response = await fetch(`${API_URL}/submissions/pending?t=${Date.now()}`);
   if (!response.ok) {
     throw new Error('Failed to fetch pending submissions');
   }

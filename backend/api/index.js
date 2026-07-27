@@ -33,7 +33,7 @@ app.get('/db-test', async (req, res) => {
   }
 });
 
-// Test database connection
+// Test database connection (legacy)
 app.get('/test-db', async (req, res) => {
   try {
     const result = await pool.query('SELECT NOW()');
@@ -353,67 +353,6 @@ app.get('/gaps', async (req, res) => {
   }
 });
 
-// ============ SUBMISSION ROUTES ============
-
-// POST /submissions - Create a new submission
-app.post('/submissions', async (req, res) => {
-  try {
-    const { submitted_by_name, submitted_by_email, scope_person_id, items } = req.body;
-
-    // Validate required fields
-    if (!submitted_by_name || !submitted_by_email || !items || !Array.isArray(items)) {
-      return res.status(400).json({ 
-        error: 'submitted_by_name, submitted_by_email, and items array are required' 
-      });
-    }
-
-    // Start a transaction
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-
-      // Insert the submission
-      const submissionResult = await client.query(
-        `INSERT INTO submissions (submitted_by_name, submitted_by_email, scope_person_id, status, raw_payload)
-         VALUES ($1, $2, $3, 'pending', $4)
-         RETURNING *`,
-        [submitted_by_name, submitted_by_email, scope_person_id, req.body]
-      );
-
-      const submission = submissionResult.rows[0];
-
-      // Insert each submission item
-      const insertedItems = [];
-      for (const item of items) {
-        const { target_type, target_person_id, proposed_data, conflict_flag } = item;
-        const itemResult = await client.query(
-          `INSERT INTO submission_items 
-           (submission_id, target_type, target_person_id, proposed_data, conflict_flag)
-           VALUES ($1, $2, $3, $4, $5)
-           RETURNING *`,
-          [submission.id, target_type, target_person_id, proposed_data, conflict_flag || false]
-        );
-        insertedItems.push(itemResult.rows[0]);
-      }
-
-      await client.query('COMMIT');
-
-      res.status(201).json({
-        submission: submission,
-        items: insertedItems
-      });
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
-  } catch (err) {
-    console.error('Error creating submission:', err);
-    res.status(500).json({ error: 'Failed to create submission' });
-  }
-});
-
 // POST /person-field-status - Mark a field as unknown_confirmed or pending
 app.post('/person-field-status', async (req, res) => {
   try {
@@ -479,19 +418,17 @@ app.get('/person-field-status/:person_id', async (req, res) => {
 
 // ============ SUBMISSION ROUTES ============
 
-// POST /submissions - Create a new submission
+// POST /submissions - Create a new submission with conflict detection
 app.post('/submissions', async (req, res) => {
   try {
     const { submitted_by_name, submitted_by_email, scope_person_id, items } = req.body;
 
-    // Validate required fields
     if (!submitted_by_name || !submitted_by_email || !items || !Array.isArray(items)) {
-      return res.status(400).json({ 
-        error: 'submitted_by_name, submitted_by_email, and items array are required' 
+      return res.status(400).json({
+        error: 'submitted_by_name, submitted_by_email, and items array are required'
       });
     }
 
-    // Start a transaction
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -503,25 +440,84 @@ app.post('/submissions', async (req, res) => {
          RETURNING *`,
         [submitted_by_name, submitted_by_email, scope_person_id, req.body]
       );
-
       const submission = submissionResult.rows[0];
 
-      // Insert each submission item
       const insertedItems = [];
       for (const item of items) {
-        const { target_type, target_person_id, proposed_data, conflict_flag } = item;
+        let conflict_flag = false;
+        let matchedPersonId = item.target_person_id || null;
+
+        // Conflict detection for edit_person
+        if (item.target_type === 'edit_person') {
+          // If target_person_id is provided, use it; otherwise try to match by name
+          if (!matchedPersonId) {
+            const proposed = item.proposed_data;
+            // Build match query
+            let matchQuery = `
+              SELECT id, first_name, last_name, birth_date, birth_place, death_date, death_place, gender, notes
+              FROM people
+              WHERE LOWER(first_name) = LOWER($1)
+                AND LOWER(last_name) = LOWER($2)
+            `;
+            const params = [proposed.first_name || '', proposed.last_name || ''];
+            if (proposed.birth_date) {
+              const year = new Date(proposed.birth_date).getFullYear();
+              matchQuery += ` AND EXTRACT(YEAR FROM birth_date) BETWEEN $3 AND $4`;
+              params.push(year - 2, year + 2);
+            }
+            const matchResult = await client.query(matchQuery, params);
+            if (matchResult.rows.length > 0) {
+              matchedPersonId = matchResult.rows[0].id;
+              const existing = matchResult.rows[0];
+              // Compare fields
+              const fields = ['first_name', 'last_name', 'birth_date', 'birth_place', 'death_date', 'death_place', 'gender', 'notes'];
+              for (const field of fields) {
+                if (proposed[field] !== undefined && proposed[field] !== null) {
+                  const existingVal = existing[field];
+                  const proposedVal = proposed[field];
+                  if (existingVal && proposedVal && existingVal.toString() !== proposedVal.toString()) {
+                    conflict_flag = true;
+                    break;
+                  }
+                }
+              }
+            }
+          } else {
+            // target_person_id provided – still check for conflicts
+            const existingResult = await client.query(
+              'SELECT * FROM people WHERE id = $1',
+              [matchedPersonId]
+            );
+            if (existingResult.rows.length > 0) {
+              const existing = existingResult.rows[0];
+              const proposed = item.proposed_data;
+              const fields = ['first_name', 'last_name', 'birth_date', 'birth_place', 'death_date', 'death_place', 'gender', 'notes'];
+              for (const field of fields) {
+                if (proposed[field] !== undefined && proposed[field] !== null) {
+                  const existingVal = existing[field];
+                  const proposedVal = proposed[field];
+                  if (existingVal && proposedVal && existingVal.toString() !== proposedVal.toString()) {
+                    conflict_flag = true;
+                    break;
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // Insert item with computed conflict_flag
         const itemResult = await client.query(
           `INSERT INTO submission_items 
            (submission_id, target_type, target_person_id, proposed_data, conflict_flag)
            VALUES ($1, $2, $3, $4, $5)
            RETURNING *`,
-          [submission.id, target_type, target_person_id, proposed_data, conflict_flag || false]
+          [submission.id, item.target_type, matchedPersonId, item.proposed_data, conflict_flag]
         );
         insertedItems.push(itemResult.rows[0]);
       }
 
       await client.query('COMMIT');
-
       res.status(201).json({
         submission: submission,
         items: insertedItems
@@ -538,14 +534,42 @@ app.post('/submissions', async (req, res) => {
   }
 });
 
-// GET /submissions/pending - Get all pending submissions for review
+// GET /submissions/pending - Get pending submissions with existing person data for conflict display
 app.get('/submissions/pending', async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT 
         s.*,
-        COUNT(si.id) as item_count,
-        json_agg(si.*) as items
+        json_agg(
+          json_build_object(
+            'id', si.id,
+            'submission_id', si.submission_id,
+            'target_type', si.target_type,
+            'target_person_id', si.target_person_id,
+            'proposed_data', si.proposed_data,
+            'conflict_flag', si.conflict_flag,
+            'resolution', si.resolution,
+            'created_at', si.created_at,
+            'existing_person', CASE 
+              WHEN si.target_person_id IS NOT NULL THEN (
+                SELECT json_build_object(
+                  'id', p.id,
+                  'first_name', p.first_name,
+                  'last_name', p.last_name,
+                  'birth_date', p.birth_date,
+                  'birth_place', p.birth_place,
+                  'death_date', p.death_date,
+                  'death_place', p.death_place,
+                  'gender', p.gender,
+                  'notes', p.notes
+                )
+                FROM people p
+                WHERE p.id = si.target_person_id
+              )
+              ELSE NULL
+            END
+          )
+        ) as items
       FROM submissions s
       LEFT JOIN submission_items si ON s.id = si.submission_id
       WHERE s.status = 'pending'
@@ -563,23 +587,17 @@ app.get('/submissions/pending', async (req, res) => {
 app.get('/submissions/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    
-    // Get submission
     const submissionResult = await pool.query(
       'SELECT * FROM submissions WHERE id = $1',
       [id]
     );
-    
     if (submissionResult.rows.length === 0) {
       return res.status(404).json({ error: 'Submission not found' });
     }
-    
-    // Get items
     const itemsResult = await pool.query(
       'SELECT * FROM submission_items WHERE submission_id = $1',
       [id]
     );
-    
     res.json({
       ...submissionResult.rows[0],
       items: itemsResult.rows
@@ -594,7 +612,7 @@ app.get('/submissions/:id', async (req, res) => {
 app.patch('/submission-items/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { resolution } = req.body; // 'accepted', 'rejected', 'merged_with_edits'
+    const { resolution } = req.body;
 
     if (!['accepted', 'rejected', 'merged_with_edits'].includes(resolution)) {
       return res.status(400).json({ 
@@ -602,7 +620,6 @@ app.patch('/submission-items/:id', async (req, res) => {
       });
     }
 
-    // Update the item
     const itemResult = await pool.query(
       'UPDATE submission_items SET resolution = $1 WHERE id = $2 RETURNING *',
       [resolution, id]
@@ -614,12 +631,10 @@ app.patch('/submission-items/:id', async (req, res) => {
 
     const item = itemResult.rows[0];
 
-    // If accepted, apply the change to the master tree
     if (resolution === 'accepted' || resolution === 'merged_with_edits') {
       const proposed = item.proposed_data;
 
       if (item.target_type === 'new_person') {
-        // Insert new person
         const personResult = await pool.query(
           `INSERT INTO people (first_name, last_name, maiden_name, birth_date, birth_place, 
             death_date, death_place, gender, notes, status, added_by)
@@ -630,7 +645,6 @@ app.patch('/submission-items/:id', async (req, res) => {
            proposed.death_place, proposed.gender, proposed.notes,
            'confirmed', 'submission']
         );
-        // Update target_person_id with the new person's ID
         await pool.query(
           'UPDATE submission_items SET target_person_id = $1 WHERE id = $2',
           [personResult.rows[0].id, id]
@@ -639,7 +653,6 @@ app.patch('/submission-items/:id', async (req, res) => {
       }
       
       else if (item.target_type === 'edit_person') {
-        // Update existing person
         const personResult = await pool.query(
           `UPDATE people SET 
             first_name = COALESCE($1, first_name),
@@ -663,7 +676,6 @@ app.patch('/submission-items/:id', async (req, res) => {
       }
       
       else if (item.target_type === 'new_relationship') {
-        // Create new relationship
         const relResult = await pool.query(
           `INSERT INTO relationships (person_a_id, person_b_id, type, subtype, start_date, end_date, status)
            VALUES ($1, $2, $3, $4, $5, $6, 'confirmed')
@@ -674,7 +686,6 @@ app.patch('/submission-items/:id', async (req, res) => {
         res.json({ message: 'Relationship created', relationship: relResult.rows[0] });
       }
     } else {
-      // Rejected - no changes made
       res.json({ message: 'Item rejected', item: itemResult.rows[0] });
     }
   } catch (err) {
@@ -723,8 +734,8 @@ app.get('/', (req, res) => {
       '/db-test',
       '/person-field-status',
       '/submissions',
-      '//submissions/pending',
-      '/submission-items' 
+      '/submissions/pending',
+      '/submission-items'
     ]
   });
 });
