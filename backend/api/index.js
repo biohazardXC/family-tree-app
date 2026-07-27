@@ -353,6 +353,67 @@ app.get('/gaps', async (req, res) => {
   }
 });
 
+// ============ SUBMISSION ROUTES ============
+
+// POST /submissions - Create a new submission
+app.post('/submissions', async (req, res) => {
+  try {
+    const { submitted_by_name, submitted_by_email, scope_person_id, items } = req.body;
+
+    // Validate required fields
+    if (!submitted_by_name || !submitted_by_email || !items || !Array.isArray(items)) {
+      return res.status(400).json({ 
+        error: 'submitted_by_name, submitted_by_email, and items array are required' 
+      });
+    }
+
+    // Start a transaction
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Insert the submission
+      const submissionResult = await client.query(
+        `INSERT INTO submissions (submitted_by_name, submitted_by_email, scope_person_id, status, raw_payload)
+         VALUES ($1, $2, $3, 'pending', $4)
+         RETURNING *`,
+        [submitted_by_name, submitted_by_email, scope_person_id, req.body]
+      );
+
+      const submission = submissionResult.rows[0];
+
+      // Insert each submission item
+      const insertedItems = [];
+      for (const item of items) {
+        const { target_type, target_person_id, proposed_data, conflict_flag } = item;
+        const itemResult = await client.query(
+          `INSERT INTO submission_items 
+           (submission_id, target_type, target_person_id, proposed_data, conflict_flag)
+           VALUES ($1, $2, $3, $4, $5)
+           RETURNING *`,
+          [submission.id, target_type, target_person_id, proposed_data, conflict_flag || false]
+        );
+        insertedItems.push(itemResult.rows[0]);
+      }
+
+      await client.query('COMMIT');
+
+      res.status(201).json({
+        submission: submission,
+        items: insertedItems
+      });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    console.error('Error creating submission:', err);
+    res.status(500).json({ error: 'Failed to create submission' });
+  }
+});
+
 // POST /person-field-status - Mark a field as unknown_confirmed or pending
 app.post('/person-field-status', async (req, res) => {
   try {
@@ -416,6 +477,240 @@ app.get('/person-field-status/:person_id', async (req, res) => {
   }
 });
 
+// ============ SUBMISSION ROUTES ============
+
+// POST /submissions - Create a new submission
+app.post('/submissions', async (req, res) => {
+  try {
+    const { submitted_by_name, submitted_by_email, scope_person_id, items } = req.body;
+
+    // Validate required fields
+    if (!submitted_by_name || !submitted_by_email || !items || !Array.isArray(items)) {
+      return res.status(400).json({ 
+        error: 'submitted_by_name, submitted_by_email, and items array are required' 
+      });
+    }
+
+    // Start a transaction
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Insert the submission
+      const submissionResult = await client.query(
+        `INSERT INTO submissions (submitted_by_name, submitted_by_email, scope_person_id, status, raw_payload)
+         VALUES ($1, $2, $3, 'pending', $4)
+         RETURNING *`,
+        [submitted_by_name, submitted_by_email, scope_person_id, req.body]
+      );
+
+      const submission = submissionResult.rows[0];
+
+      // Insert each submission item
+      const insertedItems = [];
+      for (const item of items) {
+        const { target_type, target_person_id, proposed_data, conflict_flag } = item;
+        const itemResult = await client.query(
+          `INSERT INTO submission_items 
+           (submission_id, target_type, target_person_id, proposed_data, conflict_flag)
+           VALUES ($1, $2, $3, $4, $5)
+           RETURNING *`,
+          [submission.id, target_type, target_person_id, proposed_data, conflict_flag || false]
+        );
+        insertedItems.push(itemResult.rows[0]);
+      }
+
+      await client.query('COMMIT');
+
+      res.status(201).json({
+        submission: submission,
+        items: insertedItems
+      });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    console.error('Error creating submission:', err);
+    res.status(500).json({ error: 'Failed to create submission' });
+  }
+});
+
+// GET /submissions/pending - Get all pending submissions for review
+app.get('/submissions/pending', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        s.*,
+        COUNT(si.id) as item_count,
+        json_agg(si.*) as items
+      FROM submissions s
+      LEFT JOIN submission_items si ON s.id = si.submission_id
+      WHERE s.status = 'pending'
+      GROUP BY s.id
+      ORDER BY s.submitted_at ASC
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching pending submissions:', err);
+    res.status(500).json({ error: 'Failed to fetch pending submissions' });
+  }
+});
+
+// GET /submissions/:id - Get a specific submission with its items
+app.get('/submissions/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Get submission
+    const submissionResult = await pool.query(
+      'SELECT * FROM submissions WHERE id = $1',
+      [id]
+    );
+    
+    if (submissionResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Submission not found' });
+    }
+    
+    // Get items
+    const itemsResult = await pool.query(
+      'SELECT * FROM submission_items WHERE submission_id = $1',
+      [id]
+    );
+    
+    res.json({
+      ...submissionResult.rows[0],
+      items: itemsResult.rows
+    });
+  } catch (err) {
+    console.error('Error fetching submission:', err);
+    res.status(500).json({ error: 'Failed to fetch submission' });
+  }
+});
+
+// PATCH /submission-items/:id - Review a submission item
+app.patch('/submission-items/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { resolution } = req.body; // 'accepted', 'rejected', 'merged_with_edits'
+
+    if (!['accepted', 'rejected', 'merged_with_edits'].includes(resolution)) {
+      return res.status(400).json({ 
+        error: 'resolution must be "accepted", "rejected", or "merged_with_edits"' 
+      });
+    }
+
+    // Update the item
+    const itemResult = await pool.query(
+      'UPDATE submission_items SET resolution = $1 WHERE id = $2 RETURNING *',
+      [resolution, id]
+    );
+
+    if (itemResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Submission item not found' });
+    }
+
+    const item = itemResult.rows[0];
+
+    // If accepted, apply the change to the master tree
+    if (resolution === 'accepted' || resolution === 'merged_with_edits') {
+      const proposed = item.proposed_data;
+
+      if (item.target_type === 'new_person') {
+        // Insert new person
+        const personResult = await pool.query(
+          `INSERT INTO people (first_name, last_name, maiden_name, birth_date, birth_place, 
+            death_date, death_place, gender, notes, status, added_by)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+           RETURNING *`,
+          [proposed.first_name, proposed.last_name, proposed.maiden_name,
+           proposed.birth_date, proposed.birth_place, proposed.death_date,
+           proposed.death_place, proposed.gender, proposed.notes,
+           'confirmed', 'submission']
+        );
+        // Update target_person_id with the new person's ID
+        await pool.query(
+          'UPDATE submission_items SET target_person_id = $1 WHERE id = $2',
+          [personResult.rows[0].id, id]
+        );
+        res.json({ message: 'Person created', person: personResult.rows[0] });
+      }
+      
+      else if (item.target_type === 'edit_person') {
+        // Update existing person
+        const personResult = await pool.query(
+          `UPDATE people SET 
+            first_name = COALESCE($1, first_name),
+            last_name = COALESCE($2, last_name),
+            maiden_name = COALESCE($3, maiden_name),
+            birth_date = COALESCE($4, birth_date),
+            birth_place = COALESCE($5, birth_place),
+            death_date = COALESCE($6, death_date),
+            death_place = COALESCE($7, death_place),
+            gender = COALESCE($8, gender),
+            notes = COALESCE($9, notes),
+            updated_at = NOW()
+           WHERE id = $10
+           RETURNING *`,
+          [proposed.first_name, proposed.last_name, proposed.maiden_name,
+           proposed.birth_date, proposed.birth_place, proposed.death_date,
+           proposed.death_place, proposed.gender, proposed.notes,
+           item.target_person_id]
+        );
+        res.json({ message: 'Person updated', person: personResult.rows[0] });
+      }
+      
+      else if (item.target_type === 'new_relationship') {
+        // Create new relationship
+        const relResult = await pool.query(
+          `INSERT INTO relationships (person_a_id, person_b_id, type, subtype, start_date, end_date, status)
+           VALUES ($1, $2, $3, $4, $5, $6, 'confirmed')
+           RETURNING *`,
+          [proposed.person_a_id, proposed.person_b_id, proposed.type, 
+           proposed.subtype, proposed.start_date, proposed.end_date]
+        );
+        res.json({ message: 'Relationship created', relationship: relResult.rows[0] });
+      }
+    } else {
+      // Rejected - no changes made
+      res.json({ message: 'Item rejected', item: itemResult.rows[0] });
+    }
+  } catch (err) {
+    console.error('Error reviewing submission item:', err);
+    res.status(500).json({ error: 'Failed to review submission item' });
+  }
+});
+
+// PATCH /submissions/:id/status - Update submission status
+app.patch('/submissions/:id/status', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    if (!['pending', 'merged', 'rejected'].includes(status)) {
+      return res.status(400).json({ 
+        error: 'status must be "pending", "merged", or "rejected"' 
+      });
+    }
+
+    const result = await pool.query(
+      'UPDATE submissions SET status = $1 WHERE id = $2 RETURNING *',
+      [status, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Submission not found' });
+    }
+
+    res.json({ message: `Submission status updated to ${status}`, submission: result.rows[0] });
+  } catch (err) {
+    console.error('Error updating submission status:', err);
+    res.status(500).json({ error: 'Failed to update submission status' });
+  }
+});
+
 // Welcome route
 app.get('/', (req, res) => {
   res.json({ 
@@ -426,7 +721,10 @@ app.get('/', (req, res) => {
       '/relationships',
       '/test-db',
       '/db-test',
-      '/person-field-status'
+      '/person-field-status',
+      '/submissions',
+      '//submissions/pending',
+      '/submission-items' 
     ]
   });
 });
