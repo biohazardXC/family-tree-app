@@ -13,6 +13,21 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Test database connection route
+app.get('/db-test', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT NOW()');
+    res.json({ success: true, time: result.rows[0] });
+  } catch (err) {
+    console.error('Database connection error:', err);
+    res.status(500).json({ 
+      error: err.message,
+      stack: err.stack,
+      code: err.code
+    });
+  }
+});
+
 // Test database connection
 app.get('/test-db', async (req, res) => {
   try {
@@ -394,6 +409,21 @@ app.get('/person-field-status/:person_id', async (req, res) => {
     console.error('Error fetching field statuses:', err);
     res.status(500).json({ error: 'Failed to fetch field statuses' });
   }
+});
+
+// Welcome route
+app.get('/', (req, res) => {
+  res.json({ 
+    message: 'Family Tree API is running!',
+    endpoints: [
+      '/people',
+      '/gaps',
+      '/relationships',
+      '/test-db',
+      '/db-test',
+      '/person-field-status'
+    ]
+  });
 });
 
 // Start server (only when running locally)
