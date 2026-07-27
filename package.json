@@ -2,7 +2,7 @@
   "name": "family-tree-app",
   "version": "1.0.0",
   "scripts": {
-    "build": "cd frontend && npm run build"
+    "start": "node backend/server.js"
   },
   "dependencies": {
     "cors": "^2.8.6",
