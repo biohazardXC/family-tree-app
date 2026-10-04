@@ -40,7 +40,8 @@ export const partnerships = sqliteTable("partnerships", {
     .$defaultFn(() => new Date()),
 });
 
-// A parent -> child link.
+// A parent -> child link. adoption is null for biological,
+// or "adopted" | "step" | "foster" for how the child joined the family.
 export const parentEdges = sqliteTable("parent_edges", {
   id: text("id")
     .primaryKey()
@@ -51,7 +52,40 @@ export const parentEdges = sqliteTable("parent_edges", {
   childId: text("child_id")
     .notNull()
     .references(() => people.id, { onDelete: "cascade" }),
+  adoption: text("adoption"),
   createdAt: integer("created_at", { mode: "timestamp_ms" })
     .notNull()
     .$defaultFn(() => new Date()),
+});
+
+// A personal, no-password invite link. Admin creates it, sends it via
+// WhatsApp/SMS, the invitee taps it and gets their simple form.
+export const invites = sqliteTable("invites", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => randomUUID()),
+  token: text("token").notNull().unique(),
+  name: text("name").notNull(), // who the invite is for
+  note: text("note"), // where it was sent / any note
+  status: text("status").notNull().default("pending"), // pending | opened | submitted
+  createdAt: integer("created_at", { mode: "timestamp_ms" })
+    .notNull()
+    .$defaultFn(() => new Date()),
+  submittedAt: integer("submitted_at", { mode: "timestamp_ms" }),
+});
+
+// A completed invitee form, waiting for admin review.
+export const submissions = sqliteTable("submissions", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => randomUUID()),
+  inviteId: text("invite_id")
+    .notNull()
+    .references(() => invites.id, { onDelete: "cascade" }),
+  status: text("status").notNull().default("submitted"), // submitted | approved | rejected
+  itemsJson: text("items_json").notNull(), // SubmissionItem[] as JSON
+  createdAt: integer("created_at", { mode: "timestamp_ms" })
+    .notNull()
+    .$defaultFn(() => new Date()),
+  decidedAt: integer("decided_at", { mode: "timestamp_ms" }),
 });

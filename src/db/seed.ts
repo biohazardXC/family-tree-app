@@ -47,6 +47,7 @@ export async function seedDemoFamily(): Promise<number> {
     await db.insert(parentEdges).values({
       parentId: ids.get(l.parent)!,
       childId: ids.get(l.child)!,
+      adoption: l.adoption ?? null,
       createdAt: new Date(base + 20_000 + k),
     });
     k += 1;

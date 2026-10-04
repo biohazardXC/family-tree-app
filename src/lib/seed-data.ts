@@ -123,6 +123,14 @@ export const DEMO_PEOPLE: DemoPerson[] = [
     birthDate: "1998",
     birthPlace: "Johannesburg",
   },
+  {
+    key: "themba",
+    firstName: "Thembinkosi",
+    lastName: "Naidoo",
+    gender: "male",
+    birthDate: "2005",
+    notes: "Adopted by Dineo and Kabelo as a baby.",
+  },
 ];
 
 export const DEMO_PARTNERSHIPS: { a: string; b: string; status?: string }[] = [
@@ -132,7 +140,11 @@ export const DEMO_PARTNERSHIPS: { a: string; b: string; status?: string }[] = [
   { a: "dineo", b: "kabelo", status: "partners" },
 ];
 
-export const DEMO_PARENT_LINKS: { parent: string; child: string }[] = [
+export const DEMO_PARENT_LINKS: {
+  parent: string;
+  child: string;
+  adoption?: "adopted" | "step" | "foster";
+}[] = [
   { parent: "johan", child: "thabo" },
   { parent: "ruth", child: "thabo" },
   { parent: "johan", child: "lerato" },
@@ -147,4 +159,6 @@ export const DEMO_PARENT_LINKS: { parent: string; child: string }[] = [
   { parent: "michael", child: "emma" },
   { parent: "lerato", child: "josh" },
   { parent: "michael", child: "josh" },
+  { parent: "dineo", child: "themba", adoption: "adopted" },
+  { parent: "kabelo", child: "themba", adoption: "adopted" },
 ];

@@ -21,9 +21,9 @@ export async function POST(req: Request) {
     }
 
     if (body.action === "reseed") {
-      db.delete(parentEdges).run();
-      db.delete(partnerships).run();
-      db.delete(people).run();
+      await db.delete(parentEdges).run();
+      await db.delete(partnerships).run();
+      await db.delete(people).run();
       const count = await seedDemoFamily();
       return NextResponse.json({ ok: true, action: "reseed", count });
     }

@@ -22,6 +22,7 @@ interface CreateBody {
     type: RelationType;
     toId: string;
     partnershipStatus?: string;
+    adoption?: string; // for children: "adopted" | "step" | "foster" (null = biological)
   };
 }
 
@@ -76,7 +77,12 @@ export async function POST(req: Request) {
           status: clean(body.relation.partnershipStatus),
         });
       } else if (type === "child") {
-        await db.insert(parentEdges).values({ parentId: toId, childId: person.id });
+        const adoption = ["adopted", "step", "foster"].includes(body.relation.adoption ?? "")
+          ? body.relation.adoption!
+          : null;
+        await db
+          .insert(parentEdges)
+          .values({ parentId: toId, childId: person.id, adoption });
       } else if (type === "parent") {
         await db.insert(parentEdges).values({ parentId: person.id, childId: toId });
       } else if (type === "sibling") {

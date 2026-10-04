@@ -4,7 +4,7 @@ import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import type { PersonDTO } from "@/lib/types";
 import { fullName, initials, lifespan } from "@/lib/person-utils";
 
-export type PersonNodeType = Node<{ person: PersonDTO }, "person">;
+export type PersonNodeType = Node<{ person: PersonDTO; adopted?: boolean }, "person">;
 
 const AVATAR_STYLES: Record<string, string> = {
   male: "bg-sky-100 text-sky-700",
@@ -37,7 +37,7 @@ export default function PersonNode({ data, selected }: NodeProps<PersonNodeType>
         {initials(p)}
       </div>
 
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <div
           className={`truncate text-sm font-semibold ${deceased ? "text-slate-600" : "text-slate-900"}`}
         >
@@ -47,6 +47,11 @@ export default function PersonNode({ data, selected }: NodeProps<PersonNodeType>
           <div className="truncate text-[11px] italic text-slate-400">née {p.maidenName}</div>
         )}
         <div className="text-[11px] text-slate-500">{lifespan(p) || "dates unknown"}</div>
+        {data.adopted && (
+          <div className="mt-0.5 inline-block rounded-full bg-amber-100 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-amber-700">
+            adopted
+          </div>
+        )}
       </div>
     </div>
   );

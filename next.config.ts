@@ -6,6 +6,8 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  // allow the sandbox preview proxy origin during development
+  allowedDevOrigins: ["*.e2b.app"],
 };
 
 export default nextConfig;

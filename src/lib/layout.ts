@@ -5,7 +5,7 @@ import type { PersonDTO, TreeData } from "./types";
 export const NODE_W = 216;
 export const NODE_H = 96;
 
-export type PersonNodeData = { person: PersonDTO };
+export type PersonNodeData = { person: PersonDTO; adopted?: boolean };
 
 /**
  * Lays out the whole family tree:
@@ -30,13 +30,17 @@ export function layoutTree(data: TreeData): {
 
   dagre.layout(g);
 
+  const adoptedChildIds = new Set(
+    data.parentEdges.filter((e) => e.adoption).map((e) => e.childId)
+  );
+
   const nodes: Node<PersonNodeData>[] = data.people.map((p) => {
     const pos = g.node(p.id) as { x: number; y: number };
     return {
       id: p.id,
       type: "person",
       position: { x: pos.x - NODE_W / 2, y: pos.y - NODE_H / 2 },
-      data: { person: p },
+      data: { person: p, adopted: adoptedChildIds.has(p.id) },
     };
   });
 

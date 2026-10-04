@@ -17,6 +17,7 @@ import PersonNode from "./PersonNode";
 import PersonPanel from "./PersonPanel";
 import AddRelativeModal, { type ModalKind } from "./AddRelativeModal";
 import { layoutTree } from "@/lib/layout";
+import { summarizeRelations } from "@/lib/relations";
 import { fullName, lifespan } from "@/lib/person-utils";
 import type { PersonDTO, RelationType, TreeData } from "@/lib/types";
 
@@ -68,6 +69,11 @@ function TreeCanvas() {
   const selectedPerson = useMemo(
     () => data?.people.find((p) => p.id === selectedId) ?? null,
     [data, selectedId]
+  );
+
+  const selectedRelations = useMemo(
+    () => (selectedPerson && data ? summarizeRelations(selectedPerson.id, data) : null),
+    [selectedPerson, data]
   );
 
   const focusPerson = useCallback(
@@ -278,9 +284,10 @@ function TreeCanvas() {
       )}
 
       {/* Side panel */}
-      {selectedPerson && (
+      {selectedPerson && selectedRelations && (
         <PersonPanel
           person={selectedPerson}
+          relations={selectedRelations}
           onClose={() => setSelectedId(null)}
           onAddRelative={(type: RelationType) => openModal(type, selectedPerson)}
           onSaved={handleSaved}

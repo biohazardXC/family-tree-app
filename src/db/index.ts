@@ -22,7 +22,7 @@ function createDb(): Database {
 
   return drizzle(
     async (sql, params, method) => {
-      const bound = params.map(bindable);
+      const bound = params.map(bindable) as (null | number | string | bigint)[];
       const stmt = sqlite.prepare(sql);
 
       if (method === "run") {
