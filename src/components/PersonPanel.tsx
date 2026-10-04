@@ -3,9 +3,11 @@
 import { useEffect, useState } from "react";
 import type { PersonDTO, RelationType } from "@/lib/types";
 import { fullName, initials, lifespan } from "@/lib/person-utils";
+import type { PersonRelations } from "@/lib/relations";
 
 interface Props {
   person: PersonDTO;
+  relations: PersonRelations;
   onClose: () => void;
   onAddRelative: (type: RelationType) => void;
   onSaved: () => Promise<void> | void;
@@ -51,7 +53,7 @@ function Row({ label, value }: { label: string; value?: string | null }) {
 const inputClass =
   "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100";
 
-export default function PersonPanel({ person, onClose, onAddRelative, onSaved, onDeleted }: Props) {
+export default function PersonPanel({ person, relations, onClose, onAddRelative, onSaved, onDeleted }: Props) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -235,6 +237,44 @@ export default function PersonPanel({ person, onClose, onAddRelative, onSaved, o
             />
             <Row label="Notes" value={person.notes} />
           </dl>
+
+          {(relations.parents.length > 0 ||
+            relations.partners.length > 0 ||
+            relations.children.length > 0) && (
+            <div className="mt-5 rounded-xl bg-slate-50 p-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                In the tree
+              </h3>
+              <ul className="mt-2 space-y-1.5 text-sm text-slate-700">
+                {relations.parents.map((p) => (
+                  <li key={`p-${p.id}`}>
+                    <span className="text-slate-400">Parent:</span> {p.name}
+                    {p.adoption && (
+                      <span className="ml-1 rounded-full bg-amber-100 px-1.5 py-px text-[10px] font-semibold uppercase text-amber-700">
+                        {p.adoption}
+                      </span>
+                    )}
+                  </li>
+                ))}
+                {relations.partners.map((p) => (
+                  <li key={`s-${p.id}`}>
+                    <span className="text-slate-400">Partner:</span> {p.name}
+                    {p.status && <span className="text-slate-400"> ({p.status})</span>}
+                  </li>
+                ))}
+                {relations.children.map((c) => (
+                  <li key={`c-${c.id}`}>
+                    <span className="text-slate-400">Child:</span> {c.name}
+                    {c.adoption && (
+                      <span className="ml-1 rounded-full bg-amber-100 px-1.5 py-px text-[10px] font-semibold uppercase text-amber-700">
+                        {c.adoption}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <div className="mt-6">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">

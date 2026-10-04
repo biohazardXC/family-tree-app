@@ -3,8 +3,8 @@ import { resolveDbFile } from "./path";
 import { seedDemoFamily } from "./seed";
 
 /**
- * One-time setup: creates the tables (if missing) and adds the demo family.
- * Safe to run more than once.
+ * One-time setup: creates the tables (if missing), applies small migrations,
+ * and adds the demo family to an empty database. Safe to run repeatedly.
  */
 async function main() {
   const sqlite = new DatabaseSync(resolveDbFile());
@@ -47,6 +47,38 @@ async function main() {
       created_at INTEGER NOT NULL
     );
   `);
+
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS invites (
+      id TEXT PRIMARY KEY,
+      token TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      note TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at INTEGER NOT NULL,
+      submitted_at INTEGER
+    );
+  `);
+
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS submissions (
+      id TEXT PRIMARY KEY,
+      invite_id TEXT NOT NULL REFERENCES invites(id) ON DELETE CASCADE,
+      status TEXT NOT NULL DEFAULT 'submitted',
+      items_json TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      decided_at INTEGER
+    );
+  `);
+
+  // --- migrations for databases created by older versions ---
+  const edgeCols = sqlite.prepare("PRAGMA table_info('parent_edges')").all() as {
+    name: string;
+  }[];
+  if (!edgeCols.some((c) => c.name === "adoption")) {
+    sqlite.exec("ALTER TABLE parent_edges ADD COLUMN adoption TEXT;");
+    console.log("Added 'adoption' column to parent_edges.");
+  }
 
   console.log("Tables are ready.");
 

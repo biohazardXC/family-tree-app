@@ -37,6 +37,7 @@ export default function AddRelativeModal({ kind, anchor, onClose, onCreated }: P
     notes: "",
   });
   const [partnershipStatus, setPartnershipStatus] = useState("married");
+  const [adoption, setAdoption] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -74,6 +75,7 @@ export default function AddRelativeModal({ kind, anchor, onClose, onCreated }: P
           type: kind,
           toId: anchor.id,
           ...(kind === "partner" ? { partnershipStatus } : {}),
+          ...(kind === "child" && adoption ? { adoption } : {}),
         };
       }
       const res = await fetch("/api/people", {
