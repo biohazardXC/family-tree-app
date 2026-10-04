@@ -1,5 +1,11 @@
 node_modules/
+.next/
+out/
 .env
-dist/
+data/
+*.db
 .vercel/
 .railway/
+dist/
+.DS_Store
+next-env.d.ts
