@@ -16,11 +16,15 @@ The previous version is safely tucked away in `legacy/` for reference — its be
 
 ## Run it on your own computer
 
+**You'll need [Node.js](https://nodejs.org) 22 or newer** — download the "LTS" version from nodejs.org and install it (one time only).
+
 ```bash
 npm install
 npm run setup   # creates the local database + demo family
 npm run dev     # → http://localhost:3000
 ```
+
+To stop the app, press `Ctrl+C` in the terminal. To run it again later: just `npm run dev`.
 
 ## The plan (in plain language)
 

@@ -6,14 +6,12 @@
     "dev": "next dev -H 0.0.0.0 -p 3000",
     "build": "next build",
     "start": "next start -H 0.0.0.0 -p 3000",
-    "db:push": "drizzle-kit push",
     "db:seed": "tsx src/db/seed-cli.ts",
-    "setup": "npm run db:push && npm run db:seed"
+    "setup": "tsx src/db/setup-cli.ts"
   },
   "dependencies": {
     "@dagrejs/dagre": "^1.1.8",
     "@xyflow/react": "^12.12.0",
-    "better-sqlite3": "^13.0.3",
     "drizzle-orm": "^0.45.3",
     "next": "^15.5.27",
     "react": "^19.3.0",
@@ -21,7 +19,6 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
-    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^22.20.5",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",

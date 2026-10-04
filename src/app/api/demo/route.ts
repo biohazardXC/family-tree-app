@@ -16,7 +16,7 @@ export async function POST(req: Request) {
     const body = (await req.json().catch(() => ({}))) as { action?: string };
 
     if (body.action === "clear") {
-      db.delete(people).where(eq(people.isDemo, true)).run();
+      await db.delete(people).where(eq(people.isDemo, true));
       return NextResponse.json({ ok: true, action: "clear" });
     }
 

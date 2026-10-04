@@ -1,24 +1,48 @@
-import fs from "node:fs";
-import path from "node:path";
-import Database from "better-sqlite3";
-import { drizzle, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
+import { DatabaseSync } from "node:sqlite";
+import { drizzle, type SqliteRemoteDatabase } from "drizzle-orm/sqlite-proxy";
 import * as schema from "./schema";
+import { resolveDbFile } from "./path";
 
-function createDb(): BetterSQLite3Database<typeof schema> {
-  const url = process.env.DATABASE_URL ?? "file:./data/dev.db";
-  const file = url.startsWith("file:") ? url.slice(5) : url;
-  const resolved = path.resolve(process.cwd(), file);
+export type Database = SqliteRemoteDatabase<typeof schema>;
 
-  fs.mkdirSync(path.dirname(resolved), { recursive: true });
-
-  const sqlite = new Database(resolved);
-  sqlite.pragma("journal_mode = WAL");
-  sqlite.pragma("foreign_keys = ON"); // makes deleting a person clean up their links
-
-  return drizzle(sqlite, { schema });
+/**
+ * node:sqlite can't bind JS booleans or Dates directly —
+ * translate them before they reach the database.
+ */
+function bindable(value: unknown): unknown {
+  if (typeof value === "boolean") return value ? 1 : 0;
+  if (value instanceof Date) return value.getTime();
+  return value;
 }
 
-const globalForDb = globalThis as unknown as { db?: BetterSQLite3Database<typeof schema> };
+function createDb(): Database {
+  const sqlite = new DatabaseSync(resolveDbFile());
+  sqlite.exec("PRAGMA journal_mode = WAL;");
+  sqlite.exec("PRAGMA foreign_keys = ON;"); // makes deleting a person clean up their links
+
+  return drizzle(
+    async (sql, params, method) => {
+      const bound = params.map(bindable);
+      const stmt = sqlite.prepare(sql);
+
+      if (method === "run") {
+        stmt.run(...bound);
+        return { rows: [] };
+      }
+      if (method === "get") {
+        // Drizzle expects the positional row array itself here.
+        const row = stmt.get(...bound) as Record<string, unknown> | undefined;
+        return { rows: row ? Object.values(row) : [] };
+      }
+      // "all" and "values": rows as positional arrays
+      const rows = stmt.all(...bound) as Record<string, unknown>[];
+      return { rows: rows.map((r) => Object.values(r)) };
+    },
+    { schema }
+  );
+}
+
+const globalForDb = globalThis as unknown as { db?: Database };
 
 export const db = globalForDb.db ?? createDb();
 
