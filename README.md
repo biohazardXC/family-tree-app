@@ -66,3 +66,20 @@ To stop the app, press `Ctrl+C` in the terminal. To run it again later: just `np
 - `legacy/` — the previous version of the app, kept for reference only
 
 Built with Next.js, React, Drizzle ORM and Tailwind CSS — all free and modern.
+
+## Deployment (Vercel + Turso)
+
+The app talks to SQLite through libSQL, so the same code runs on a local file
+and on a hosted Turso database.
+
+| Environment | `DATABASE_URL` | `DATABASE_AUTH_TOKEN` |
+| --- | --- | --- |
+| Local dev | unset (defaults to `file:./data/dev.db`) | unset |
+| Vercel | `libsql://<your-db>.turso.io` | Turso auth token |
+
+Create the tables and seed the demo family (works locally or remotely):
+
+```bash
+npm run setup                 # local file
+DATABASE_URL=libsql://... DATABASE_AUTH_TOKEN=... npm run setup   # Turso
+```
