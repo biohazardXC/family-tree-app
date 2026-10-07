@@ -77,7 +77,11 @@ and on a hosted Turso database.
 | Local dev | unset (defaults to `file:./data/dev.db`) | unset |
 | Vercel | `libsql://<your-db>.turso.io` | Turso auth token |
 
-Create the tables and seed the demo family (works locally or remotely):
+After deploying, create the tables and seed the demo family by visiting
+`https://<your-site>/api/setup?key=<SETUP_KEY>` once (set `SETUP_KEY` in the
+hosting provider's environment variables first). The route is idempotent.
+
+From a terminal, the same job (works locally or remotely):
 
 ```bash
 npm run setup                 # local file
