@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import type { PersonDTO, RelationType } from "@/lib/types";
+import { useEffect, useRef, useState } from "react";
+import type { MatchResult, PersonDTO, RelationType } from "@/lib/types";
 import { fullName } from "@/lib/person-utils";
 
 export type ModalKind = RelationType | "root";
@@ -40,6 +40,71 @@ export default function AddRelativeModal({ kind, anchor, onClose, onCreated }: P
   const [adoption, setAdoption] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [matches, setMatches] = useState<MatchResult[]>([]);
+  const [dismissed, setDismissed] = useState<string[]>([]);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // "Is this someone we already have?" — same fuzzy matcher the invite form uses.
+  useEffect(() => {
+    if (timer.current) clearTimeout(timer.current);
+    if (form.firstName.trim().length < 2) {
+      setMatches([]);
+      return;
+    }
+    timer.current = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/matches", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            firstName: form.firstName,
+            lastName: form.lastName || null,
+            birthDate: form.birthDate || null,
+          }),
+        });
+        const j = (await res.json()) as { matches?: MatchResult[] };
+        setMatches(
+          (j.matches ?? []).filter(
+            (m) => m.person.id !== anchor?.id && !dismissed.includes(m.person.id)
+          )
+        );
+      } catch {
+        setMatches([]);
+      }
+    }, 500);
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+    };
+  }, [form.firstName, form.lastName, form.birthDate, anchor?.id, dismissed]);
+
+  /** Connect an existing person instead of creating a duplicate. */
+  const linkExisting = async (person: PersonDTO) => {
+    if (!anchor || kind === "root") return;
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/relations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: kind,
+          toId: anchor.id,
+          personId: person.id,
+          ...(kind === "partner" ? { partnershipStatus } : {}),
+          ...(kind === "child" && adoption ? { adoption } : {}),
+        }),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(j?.error ?? "Could not connect them");
+      }
+      await onCreated((await res.json()) as PersonDTO);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not connect them — please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const set =
     (key: keyof typeof form) =>
@@ -108,6 +173,46 @@ export default function AddRelativeModal({ kind, anchor, onClose, onCreated }: P
       >
         <h2 className="text-lg font-semibold">{TITLES[kind]}</h2>
         <p className="mt-1 text-xs text-slate-500">{context}</p>
+
+        {matches.length > 0 && anchor && kind !== "root" && (
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3">
+            <p className="text-xs font-medium text-amber-900">
+              Already in the tree? Pick someone to connect instead of adding a duplicate.
+            </p>
+            <ul className="mt-2 space-y-2">
+              {matches.map((m) => (
+                <li key={m.person.id} className="flex items-center justify-between gap-2">
+                  <span className="text-sm text-slate-700">
+                    {fullName(m.person)}
+                    {m.person.birthDate ? (
+                      <span className="text-slate-400"> · b. {m.person.birthDate}</span>
+                    ) : null}
+                    {m.confidence === "likely" ? (
+                      <span className="ml-1 text-xs text-amber-700">likely match</span>
+                    ) : null}
+                  </span>
+                  <span className="flex shrink-0 gap-1">
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => linkExisting(m.person)}
+                      className="rounded-lg bg-amber-600 px-2.5 py-1 text-xs font-medium text-white disabled:opacity-50"
+                    >
+                      That&apos;s them
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDismissed((d) => [...d, m.person.id])}
+                      className="rounded-lg border border-amber-300 px-2.5 py-1 text-xs text-amber-800"
+                    >
+                      No
+                    </button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         <div className="mt-4 grid grid-cols-2 gap-3">
           <label className="col-span-2 block text-xs font-medium text-slate-500">

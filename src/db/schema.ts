@@ -89,3 +89,21 @@ export const submissions = sqliteTable("submissions", {
     .$defaultFn(() => new Date()),
   decidedAt: integer("decided_at", { mode: "timestamp_ms" }),
 });
+
+// An explicit "these two are siblings" link, used when no parents are known
+// yet. Once a parent is recorded for either of them, the parent is applied to
+// the whole sibling group and the tree shows them normally.
+export const siblingEdges = sqliteTable("sibling_edges", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => randomUUID()),
+  aId: text("a_id")
+    .notNull()
+    .references(() => people.id, { onDelete: "cascade" }),
+  bId: text("b_id")
+    .notNull()
+    .references(() => people.id, { onDelete: "cascade" }),
+  createdAt: integer("created_at", { mode: "timestamp_ms" })
+    .notNull()
+    .$defaultFn(() => new Date()),
+});

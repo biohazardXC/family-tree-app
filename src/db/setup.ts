@@ -31,6 +31,12 @@ export const SCHEMA_STATEMENTS = [
      adoption TEXT,
      created_at INTEGER NOT NULL
    );`,
+  `CREATE TABLE IF NOT EXISTS sibling_edges (
+     id TEXT PRIMARY KEY,
+     a_id TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+     b_id TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+     created_at INTEGER NOT NULL
+   );`,
   `CREATE TABLE IF NOT EXISTS invites (
      id TEXT PRIMARY KEY,
      token TEXT NOT NULL UNIQUE,

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { parentEdges, partnerships, people } from "@/db/schema";
+import { linkSiblings, syncGroupParents } from "@/db/sibling-links";
 import type { RelationType } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -85,6 +86,8 @@ export async function POST(req: Request) {
           .values({ parentId: toId, childId: person.id, adoption });
       } else if (type === "parent") {
         await db.insert(parentEdges).values({ parentId: person.id, childId: toId });
+        // The new parent belongs to the anchor's whole sibling group.
+        await syncGroupParents(toId);
       } else if (type === "sibling") {
         // A sibling shares the same parents — copy the anchor's parent links.
         const anchorParents = await db
@@ -95,6 +98,10 @@ export async function POST(req: Request) {
           await db
             .insert(parentEdges)
             .values(anchorParents.map((e) => ({ parentId: e.parentId, childId: person.id })));
+        } else {
+          // No parents known yet — remember the sibling link itself, so the two
+          // are still connected. Parents added later flow to both of them.
+          await linkSiblings(toId, person.id);
         }
       }
     }

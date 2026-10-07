@@ -29,10 +29,18 @@ export interface ParentEdgeDTO {
   adoption: AdoptionType | null; // null = biological
 }
 
+/** An explicit sibling link, used when the shared parents aren't known yet. */
+export interface SiblingEdgeDTO {
+  id: string;
+  aId: string;
+  bId: string;
+}
+
 export interface TreeData {
   people: PersonDTO[];
   partnerships: PartnershipDTO[];
   parentEdges: ParentEdgeDTO[];
+  siblingEdges?: SiblingEdgeDTO[];
 }
 
 export type RelationType = "partner" | "child" | "parent" | "sibling";
