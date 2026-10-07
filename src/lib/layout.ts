@@ -28,14 +28,29 @@ export function layoutTree(data: TreeData): {
     g.setEdge(e.parentId, e.childId);
   }
 
+  // Sibling links with no shared parents: keep the pair on the same row.
+  const siblingLinks = data.siblingEdges ?? [];
+
   dagre.layout(g);
 
   const adoptedChildIds = new Set(
     data.parentEdges.filter((e) => e.adoption).map((e) => e.childId)
   );
 
+  // Align explicitly-linked siblings vertically so they read as one generation.
+  const rowOverride = new Map<string, number>();
+  for (const link of siblingLinks) {
+    const a = g.node(link.aId) as { y: number } | undefined;
+    const b = g.node(link.bId) as { y: number } | undefined;
+    if (!a || !b) continue;
+    const y = Math.max(rowOverride.get(link.aId) ?? a.y, rowOverride.get(link.bId) ?? b.y);
+    rowOverride.set(link.aId, y);
+    rowOverride.set(link.bId, y);
+  }
+
   const nodes: Node<PersonNodeData>[] = data.people.map((p) => {
-    const pos = g.node(p.id) as { x: number; y: number };
+    const node = g.node(p.id) as { x: number; y: number };
+    const pos = { x: node.x, y: rowOverride.get(p.id) ?? node.y };
     return {
       id: p.id,
       type: "person",
@@ -55,6 +70,20 @@ export function layoutTree(data: TreeData): {
       targetHandle: "t-top",
       type: "smoothstep",
       style: { stroke: "#94a3b8", strokeWidth: 1.8 },
+    });
+  }
+
+  for (const link of siblingLinks) {
+    edges.push({
+      id: `sibling-${link.id}`,
+      source: link.aId,
+      target: link.bId,
+      sourceHandle: "s-right",
+      targetHandle: "t-left",
+      type: "smoothstep",
+      label: "siblings",
+      labelStyle: { fill: "#0f766e", fontSize: 10 },
+      style: { stroke: "#14b8a6", strokeWidth: 2, strokeDasharray: "4 4" },
     });
   }
 

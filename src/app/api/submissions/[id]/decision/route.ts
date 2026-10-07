@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { and, eq, or } from "drizzle-orm";
 import { db } from "@/db";
 import { parentEdges, partnerships, people, submissions } from "@/db/schema";
+import { linkSiblings, syncGroupParents } from "@/db/sibling-links";
 import type { AdoptionType, PersonDraft, SubmissionItem } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -163,12 +164,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
 
     // 3. Parents (of self)
+    let addedParent = false;
     for (const item of byRole("parent")) {
       const pid = await resolve(item);
       if (pid && pid !== selfId && !(await parentEdgeExists(pid, selfId))) {
         await db.insert(parentEdges).values({ parentId: pid, childId: selfId });
+        addedParent = true;
       }
     }
+    // Those parents belong to self's existing sibling group too.
+    if (addedParent) await syncGroupParents(selfId);
 
     // 4. Children (of self, and of spouse if known)
     for (const item of byRole("child")) {
@@ -193,7 +198,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       const sid = await resolve(item);
       if (!sid || sid === selfId) continue;
       const adoption = (item.adoption ?? null) as AdoptionType | null;
-      if (selfParents.length === 0) continue; // nowhere to hang them; admin can link later
+      if (selfParents.length === 0) {
+        // No parents known — record the sibling link itself so the two are
+        // still connected. Parents added later flow to the whole group.
+        await linkSiblings(selfId, sid);
+        continue;
+      }
       for (const pe of selfParents) {
         if (!(await parentEdgeExists(pe.parentId, sid))) {
           await db.insert(parentEdges).values({ parentId: pe.parentId, childId: sid, adoption });
