@@ -470,6 +470,7 @@ function InvitesTab() {
   const [list, setList] = useState<InviteDTO[] | null>(null);
   const [name, setName] = useState("");
   const [note, setNote] = useState("");
+  const [multiUse, setMultiUse] = useState(false);
   const [created, setCreated] = useState<{ url: string; path: string; name: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -485,18 +486,23 @@ function InvitesTab() {
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim() && !multiUse) return;
     setBusy(true);
     try {
       const res = await fetch("/api/invites", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, note }),
+        body: JSON.stringify({ name, note, multiUse }),
       });
       const j = (await res.json()) as { url: string; invite: { token: string } };
-      setCreated({ url: j.url, path: `/invite/${j.invite.token}`, name: name.trim() });
+      setCreated({
+        url: j.url,
+        path: `/invite/${j.invite.token}`,
+        name: name.trim() || "the family group",
+      });
       setName("");
       setNote("");
+      setMultiUse(false);
       setCopied(false);
       load();
     } finally {
@@ -527,7 +533,7 @@ function InvitesTab() {
         <h2 className="font-semibold text-slate-800">Invite a family member</h2>
         <p className="mt-1 text-xs text-slate-500">
           Creates a personal link — no password needed. Send it via WhatsApp; the link opens their
-          simple form.
+          simple form. A personal link can only be used once.
         </p>
         <div className="mt-4 space-y-3">
           <input
@@ -542,9 +548,22 @@ function InvitesTab() {
             placeholder="Optional note (e.g. sent via WhatsApp 4 Oct)"
             className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
           />
+          <label className="flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <input
+              type="checkbox"
+              checked={multiUse}
+              onChange={(e) => setMultiUse(e.target.checked)}
+              className="mt-0.5 h-4 w-4 accent-emerald-600"
+            />
+            <span className="text-xs text-slate-600">
+              <span className="font-semibold text-slate-800">Group link</span> — one link the whole
+              family can use. Safe to post in a WhatsApp group: everyone fills in their own details
+              and it never stops working.
+            </span>
+          </label>
           <button
             type="submit"
-            disabled={busy || !name.trim()}
+            disabled={busy || (!name.trim() && !multiUse)}
             className="rounded-full bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
           >
             {busy ? "Creating…" : "Create invite link"}

@@ -15,8 +15,10 @@ export async function GET() {
 /** Create a new invite link for someone. */
 export async function POST(req: Request) {
   try {
-    const body = (await req.json()) as { name?: string; note?: string };
-    const name = body.name?.trim();
+    const body = (await req.json()) as { name?: string; note?: string; multiUse?: boolean };
+    const multiUse = body.multiUse === true;
+    // A group link isn't addressed to anyone, so a label is enough.
+    const name = body.name?.trim() || (multiUse ? "Family group link" : "");
     if (!name) {
       return NextResponse.json({ error: "Please give the invitee's name" }, { status: 400 });
     }
@@ -28,6 +30,7 @@ export async function POST(req: Request) {
         token,
         name,
         note: body.note?.trim() || null,
+        multiUse,
       })
       .returning();
 

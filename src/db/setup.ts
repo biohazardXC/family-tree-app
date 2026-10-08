@@ -43,6 +43,7 @@ export const SCHEMA_STATEMENTS = [
      name TEXT NOT NULL,
      note TEXT,
      status TEXT NOT NULL DEFAULT 'pending',
+     multi_use INTEGER NOT NULL DEFAULT 0,
      created_at INTEGER NOT NULL,
      submitted_at INTEGER
    );`,
@@ -83,6 +84,14 @@ export async function runSetup(): Promise<SetupResult> {
     if (!edgeCols.rows.some((c) => c.name === "adoption")) {
       await client.execute("ALTER TABLE parent_edges ADD COLUMN adoption TEXT;");
       messages.push("Added 'adoption' column to parent_edges.");
+    }
+
+    const inviteCols = await client.execute("PRAGMA table_info('invites')");
+    if (!inviteCols.rows.some((c) => c.name === "multi_use")) {
+      await client.execute(
+        "ALTER TABLE invites ADD COLUMN multi_use INTEGER NOT NULL DEFAULT 0;"
+      );
+      messages.push("Added 'multi_use' column to invites.");
     }
 
     const result = await client.execute("SELECT COUNT(*) AS count FROM people");

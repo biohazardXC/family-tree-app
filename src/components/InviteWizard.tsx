@@ -28,6 +28,8 @@ interface Entry {
   draft: Draft;
   adoption: string; // for children/siblings
   partnershipStatus: string; // for spouse
+  /** For children: index into `partners` of the other parent, or "" for none. */
+  otherParent: string;
   linkedTo: string | null;
   linkedName: string | null;
   dismissed: string[];
@@ -48,6 +50,7 @@ const emptyEntry = (): Entry => ({
   draft: emptyDraft(),
   adoption: "",
   partnershipStatus: "married",
+  otherParent: "",
   linkedTo: null,
   linkedName: null,
   dismissed: [],
@@ -281,8 +284,7 @@ export default function InviteWizard({ token }: { token: string }) {
   const [error, setError] = useState<string | null>(null);
 
   const [self, setSelf] = useState<Entry>(emptyEntry);
-  const [spouse, setSpouse] = useState<Entry | null>(null);
-  const [wantSpouse, setWantSpouse] = useState(false);
+  const [partners, setPartners] = useState<Entry[]>([]);
   const [parents, setParents] = useState<(Entry | null)[]>([null, null]);
   const [children, setChildren] = useState<Entry[]>([]);
   const [siblings, setSiblings] = useState<Entry[]>([]);
@@ -306,10 +308,10 @@ export default function InviteWizard({ token }: { token: string }) {
     setError(null);
     try {
       const items = [] as Record<string, unknown>[];
-      const push = (e: Entry, role: string, extra: Record<string, unknown> = {}) => {
+      const push = (e: Entry, role: string, extra: Record<string, unknown> = {}, key?: string) => {
         if (!e.draft.firstName.trim()) return;
         items.push({
-          key: `${role}-${items.length}`,
+          key: key ?? `${role}-${items.length}`,
           role,
           person: {
             firstName: e.draft.firstName,
@@ -327,11 +329,24 @@ export default function InviteWizard({ token }: { token: string }) {
       };
 
       push(self, "self");
-      if (spouse && spouse.draft.firstName.trim()) {
-        push(spouse, "spouse", { partnershipStatus: spouse.partnershipStatus });
-      }
+
+      // Stable keys so each child can point at the right partner.
+      const partnerKeys = new Map<number, string>();
+      partners.forEach((sp, i) => {
+        if (!sp.draft.firstName.trim()) return;
+        const key = `spouse-${i}`;
+        partnerKeys.set(i, key);
+        push(sp, "spouse", { partnershipStatus: sp.partnershipStatus }, key);
+      });
+
       for (const p of parents) if (p) push(p, "parent");
-      for (const c of children) push(c, "child", { adoption: c.adoption || null });
+      for (const c of children) {
+        const idx = c.otherParent === "" ? null : Number(c.otherParent);
+        push(c, "child", {
+          adoption: c.adoption || null,
+          otherParentKey: idx !== null ? (partnerKeys.get(idx) ?? null) : null,
+        });
+      }
       for (const s of siblings) push(s, "sibling", { adoption: s.adoption || null });
 
       const res = await fetch(`/api/invite/${token}/submit`, {
@@ -349,7 +364,7 @@ export default function InviteWizard({ token }: { token: string }) {
     } finally {
       setSubmitting(false);
     }
-  }, [self, spouse, parents, children, siblings, token]);
+  }, [self, partners, parents, children, siblings, token]);
 
   // ---------- screens ----------
 
@@ -438,8 +453,11 @@ export default function InviteWizard({ token }: { token: string }) {
         return `Please add a first name for the ${label}, or clear the other boxes.`;
       return null;
     };
-    let err = check("partner", spouse);
-    if (err) return err;
+    let err: string | null = null;
+    for (let i = 0; i < partners.length; i++) {
+      err = check(`partner ${i + 1}`, partners[i]);
+      if (err) return err;
+    }
     for (let i = 0; i < parents.length; i++) {
       err = check(`parent ${i + 1}`, parents[i]);
       if (err) return err;
@@ -495,55 +513,98 @@ export default function InviteWizard({ token }: { token: string }) {
       )}
 
       {step === 1 && (
-        <StepWrap title="Your partner" subtitle="Husband, wife or partner — if you have one.">
-          {spouse === null && !wantSpouse ? (
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <p className="text-sm text-slate-600">Do you have a partner to add?</p>
-              <div className="mt-3 flex gap-2">
-                <button
-                  onClick={() => setWantSpouse(true)}
-                  className="flex-1 rounded-full bg-emerald-600 px-4 py-3 text-base font-semibold text-white hover:bg-emerald-700"
+        <StepWrap
+          title="Your partner"
+          subtitle="Husband, wife or partner. You can add a previous partner too — that helps us put children in the right place."
+        >
+          <div className="space-y-6">
+            {partners.map((sp, i) => (
+              <div key={i} className="rounded-2xl border border-slate-200 bg-white p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="font-semibold text-slate-800">
+                    {sp.partnershipStatus === "divorced" ? "Previous partner" : "Partner"}
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPartners((prev) => prev.filter((_, j) => j !== i));
+                      // keep each child's "other parent" pointing at the right person
+                      setChildren((prev) =>
+                        prev.map((c) => {
+                          if (c.otherParent === "") return c;
+                          const idx = Number(c.otherParent);
+                          if (idx === i) return { ...c, otherParent: "" };
+                          return idx > i ? { ...c, otherParent: String(idx - 1) } : c;
+                        })
+                      );
+                    }}
+                    className="text-xs font-medium text-rose-500 hover:underline"
+                  >
+                    Remove
+                  </button>
+                </div>
+                <EntryFields
+                  entry={sp}
+                  onChange={(e) => setPartners((prev) => prev.map((x, j) => (j === i ? e : x)))}
+                  showPassed
                 >
-                  Yes
-                </button>
-                <button
-                  onClick={() => setStep(2)}
-                  className="flex-1 rounded-full border border-slate-200 px-4 py-3 text-base font-medium text-slate-600 hover:bg-slate-100"
-                >
-                  Skip this
-                </button>
+                  <div>
+                    <span className="text-sm font-semibold text-slate-700">Your relationship</span>
+                    <div className="mt-1 grid grid-cols-2 gap-2">
+                      {["married", "partners", "divorced", "widowed"].map((st) => (
+                        <button
+                          key={st}
+                          type="button"
+                          onClick={() =>
+                            setPartners((prev) =>
+                              prev.map((x, j) => (j === i ? { ...x, partnershipStatus: st } : x))
+                            )
+                          }
+                          className={`rounded-xl border px-3 py-2.5 text-sm font-medium capitalize ${
+                            sp.partnershipStatus === st
+                              ? "border-emerald-500 bg-emerald-50 text-emerald-800"
+                              : "border-slate-200 bg-white text-slate-600"
+                          }`}
+                        >
+                          {st}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </EntryFields>
               </div>
-            </div>
-          ) : (
-            <EntryFields
-              entry={spouse ?? emptyEntry()}
-              onChange={(e) => {
-                setSpouse(e);
-                setWantSpouse(true);
-              }}
-              showPassed
-            >
-              <div>
-                <span className="text-sm font-semibold text-slate-700">Your relationship</span>
-                <div className="mt-1 grid grid-cols-2 gap-2">
-                  {["married", "partners", "divorced"].map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setSpouse((prev) => prev && { ...prev, partnershipStatus: s })}
-                      className={`rounded-xl border px-3 py-2.5 text-sm font-medium capitalize ${
-                        (spouse?.partnershipStatus ?? "married") === s
-                          ? "border-emerald-500 bg-emerald-50 text-emerald-800"
-                          : "border-slate-200 bg-white text-slate-600"
-                      }`}
-                    >
-                      {s}
-                    </button>
-                  ))}
+            ))}
+
+            {partners.length === 0 ? (
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <p className="text-sm text-slate-600">Do you have a partner to add?</p>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    onClick={() => setPartners([emptyEntry()])}
+                    className="flex-1 rounded-full bg-emerald-600 px-4 py-3 text-base font-semibold text-white hover:bg-emerald-700"
+                  >
+                    Yes
+                  </button>
+                  <button
+                    onClick={() => setStep(2)}
+                    className="flex-1 rounded-full border border-slate-200 px-4 py-3 text-base font-medium text-slate-600 hover:bg-slate-100"
+                  >
+                    Skip this
+                  </button>
                 </div>
               </div>
-            </EntryFields>
-          )}
+            ) : (
+              <button
+                type="button"
+                onClick={() =>
+                  setPartners((prev) => [...prev, { ...emptyEntry(), partnershipStatus: "divorced" }])
+                }
+                className="w-full rounded-xl border border-dashed border-slate-300 px-4 py-4 text-sm font-medium text-slate-500 hover:border-emerald-400 hover:text-emerald-700"
+              >
+                + Add another partner (for example someone you were married to before)
+              </button>
+            )}
+          </div>
         </StepWrap>
       )}
 
@@ -603,6 +664,52 @@ export default function InviteWizard({ token }: { token: string }) {
                   onChange={(e) => setChildren((prev) => prev.map((x, j) => (j === i ? e : x)))}
                   showPassed={false}
                 >
+                  {partners.filter((sp) => sp.draft.firstName.trim()).length > 0 && (
+                    <div>
+                      <span className="text-sm font-semibold text-slate-700">
+                        Who is their other parent?
+                      </span>
+                      <div className="mt-1 grid gap-2">
+                        {partners.map((sp, pi) =>
+                          sp.draft.firstName.trim() ? (
+                            <button
+                              key={pi}
+                              type="button"
+                              onClick={() =>
+                                setChildren((prev) =>
+                                  prev.map((x, j) => (j === i ? { ...x, otherParent: String(pi) } : x))
+                                )
+                              }
+                              className={`rounded-xl border px-3 py-2.5 text-left text-sm font-medium ${
+                                c.otherParent === String(pi)
+                                  ? "border-emerald-500 bg-emerald-50 text-emerald-800"
+                                  : "border-slate-200 bg-white text-slate-600"
+                              }`}
+                            >
+                              {sp.draft.firstName} {sp.draft.lastName}
+                              {sp.partnershipStatus === "divorced" ? " (previous partner)" : ""}
+                            </button>
+                          ) : null
+                        )}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setChildren((prev) =>
+                              prev.map((x, j) => (j === i ? { ...x, otherParent: "" } : x))
+                            )
+                          }
+                          className={`rounded-xl border px-3 py-2.5 text-left text-sm font-medium ${
+                            c.otherParent === ""
+                              ? "border-emerald-500 bg-emerald-50 text-emerald-800"
+                              : "border-slate-200 bg-white text-slate-600"
+                          }`}
+                        >
+                          Someone else, or I&apos;d rather not say
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   <div>
                     <span className="text-sm font-semibold text-slate-700">
                       How did they join your family?
@@ -676,7 +783,12 @@ export default function InviteWizard({ token }: { token: string }) {
           <ReviewList
             entries={[
               { label: "You", entry: self },
-              ...(spouse?.draft.firstName ? [{ label: "Partner", entry: spouse }] : []),
+              ...partners
+                .filter((sp) => sp.draft.firstName)
+                .map((sp) => ({
+                  label: sp.partnershipStatus === "divorced" ? "Previous partner" : "Partner",
+                  entry: sp,
+                })),
               ...parents.filter((p) => p?.draft.firstName).map((p, i) => ({ label: `Parent ${i + 1}`, entry: p! })),
               ...children.filter((c) => c.draft.firstName).map((c, i) => ({ label: `Child ${i + 1}`, entry: c })),
               ...siblings.filter((s) => s.draft.firstName).map((s, i) => ({ label: `Sibling ${i + 1}`, entry: s })),

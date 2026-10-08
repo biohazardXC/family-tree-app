@@ -177,6 +177,11 @@ function Info({ label, value }: { label: string; value: string }) {
 export default function ReadOnlyTree() {
   return (
     <ReactFlowProvider>
+      <div className="pointer-events-none absolute left-1/2 top-3 z-20 -translate-x-1/2">
+        <span className="rounded-full bg-slate-800/85 px-3 py-1 text-xs font-medium text-white shadow">
+          View only — nothing here can be changed
+        </span>
+      </div>
       <Canvas />
     </ReactFlowProvider>
   );

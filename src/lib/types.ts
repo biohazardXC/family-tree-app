@@ -55,6 +55,8 @@ export interface InviteDTO {
   name: string;
   note: string | null;
   status: InviteStatus;
+  /** A group link: reusable, and every person fills in their own name. */
+  multiUse: boolean;
   createdAt: string;
   submittedAt: string | null;
 }
@@ -83,6 +85,12 @@ export interface SubmissionItem {
   partnershipStatus?: string | null;
   /** Person in the tree the invitee confirmed they are (suggestion for the admin). */
   linkedTo?: string | null;
+  /**
+   * For children: the key of the "spouse" item who is the other parent.
+   * Empty/undefined means the invitee is the only parent given — important
+   * for children from an earlier relationship.
+   */
+  otherParentKey?: string | null;
 }
 
 export interface SubmissionDTO {

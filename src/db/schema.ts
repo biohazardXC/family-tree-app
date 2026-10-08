@@ -68,6 +68,8 @@ export const invites = sqliteTable("invites", {
   name: text("name").notNull(), // who the invite is for
   note: text("note"), // where it was sent / any note
   status: text("status").notNull().default("pending"), // pending | opened | submitted
+  // A group link can be used by many people and never closes itself.
+  multiUse: integer("multi_use", { mode: "boolean" }).notNull().default(false),
   createdAt: integer("created_at", { mode: "timestamp_ms" })
     .notNull()
     .$defaultFn(() => new Date()),

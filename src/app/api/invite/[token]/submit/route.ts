@@ -14,7 +14,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     if (!invite) {
       return NextResponse.json({ error: "This invite link is not valid." }, { status: 404 });
     }
-    if (invite.status === "submitted") {
+    if (invite.status === "submitted" && !invite.multiUse) {
       return NextResponse.json(
         { error: "This invite has already been submitted." },
         { status: 409 }
@@ -41,9 +41,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
       inviteId: invite.id,
       itemsJson: JSON.stringify(items),
     });
+    // A group link stays open so the rest of the family can still use it.
     await db
       .update(invites)
-      .set({ status: "submitted", submittedAt: new Date() })
+      .set({
+        status: invite.multiUse ? "opened" : "submitted",
+        submittedAt: new Date(),
+      })
       .where(eq(invites.id, invite.id));
 
     return NextResponse.json({ ok: true }, { status: 201 });

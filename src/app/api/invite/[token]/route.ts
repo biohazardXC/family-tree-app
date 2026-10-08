@@ -18,5 +18,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ token: 
     await db.update(invites).set({ status: "opened" }).where(eq(invites.id, invite.id));
   }
 
-  return NextResponse.json({ name: invite.name, status: invite.status });
+  return NextResponse.json({
+    name: invite.name,
+    // A group link never reports itself as finished — the next person still needs it.
+    status: invite.multiUse && invite.status === "submitted" ? "opened" : invite.status,
+    multiUse: invite.multiUse,
+  });
 }
