@@ -8,6 +8,19 @@ export const NODE_H = 96;
 export type PersonNodeData = { person: PersonDTO; adopted?: boolean };
 
 /**
+ * Standard genealogical symbols, shown in the middle of a partner line.
+ * ⚭ joined rings = married, ⚮ broken rings = divorced, ⚯ open rings =
+ * together but not married.
+ */
+const PARTNER_SYMBOL: Record<string, string> = {
+  married: "⚭",
+  engaged: "⚯",
+  partners: "⚯",
+  divorced: "⚮",
+  widowed: "⚰",
+};
+
+/**
  * Lays out the whole family tree.
  *
  * Rather than joining parents straight to children, every set of parents gets
@@ -252,6 +265,14 @@ export function layoutTree(data: TreeData): {
   }
 
   for (const link of siblingLinks) {
+    // If the two of them already share a parent, the tree shows they're
+    // siblings all by itself — drawing a second line just adds clutter, and
+    // it has to hop over anyone sitting between them. Only draw the link
+    // when there are no known parents to show the relationship for us.
+    const aParents = parentsOfChild.get(link.aId) ?? [];
+    const bParents = parentsOfChild.get(link.bId) ?? [];
+    if (aParents.some((pid) => bParents.includes(pid))) continue;
+
     edges.push({
       id: `sibling-${link.id}`,
       source: link.aId,
@@ -259,8 +280,6 @@ export function layoutTree(data: TreeData): {
       sourceHandle: "s-right",
       targetHandle: "t-left",
       type: "smoothstep",
-      label: "siblings",
-      labelStyle: { fill: "#0f766e", fontSize: 10 },
       style: { stroke: "#14b8a6", strokeWidth: 2, strokeDasharray: "4 4" },
     });
   }
@@ -273,6 +292,18 @@ export function layoutTree(data: TreeData): {
       sourceHandle: "s-right",
       targetHandle: "t-left",
       type: "straight",
+      // The traditional genealogy symbols, sitting on the middle of the line:
+      // rings joined for a marriage, broken for a divorce.
+      label: PARTNER_SYMBOL[s.status ?? "married"] ?? PARTNER_SYMBOL.married,
+      labelStyle: {
+        fill: s.status === "divorced" ? "#9f1239" : "#be123c",
+        fontSize: 16,
+        fontWeight: 600,
+      },
+      labelShowBg: true,
+      labelBgStyle: { fill: "#ffffff", stroke: "#fecdd3" },
+      labelBgPadding: [6, 3] as [number, number],
+      labelBgBorderRadius: 10,
       style: {
         stroke: "#fb7185",
         strokeWidth: 2.2,
