@@ -275,6 +275,23 @@ export default function AddRelativeModal({ kind, anchor, onClose, onCreated }: P
                 <option value="partners">Partners</option>
                 <option value="engaged">Engaged</option>
                 <option value="divorced">Divorced</option>
+                <option value="widowed">Widowed</option>
+              </select>
+            </label>
+          )}
+
+          {kind === "child" && (
+            <label className="col-span-2 block text-xs font-medium text-slate-500">
+              How did they join the family?
+              <select
+                className={`mt-1 ${inputClass}`}
+                value={adoption}
+                onChange={(e) => setAdoption(e.target.value)}
+              >
+                <option value="">Biological child</option>
+                <option value="adopted">Adopted</option>
+                <option value="step">Step-child</option>
+                <option value="foster">Foster child</option>
               </select>
             </label>
           )}

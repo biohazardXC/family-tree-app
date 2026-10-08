@@ -8,28 +8,64 @@ export const NODE_H = 96;
 export type PersonNodeData = { person: PersonDTO; adopted?: boolean };
 
 /**
- * Lays out the whole family tree:
- * - dagre stacks generations top-to-bottom using parent -> child links
- * - parent/child edges come out of the bottom of the parent into the top of the child
- * - partner edges are drawn horizontally between the two partners
+ * Lays out the whole family tree.
+ *
+ * Rather than joining parents straight to children, every set of parents gets
+ * an invisible "family" point sitting between the two generations. Both
+ * parents feed into it and all their children hang off it. That one trick is
+ * what keeps a couple together, puts their children centred underneath them,
+ * and lets someone with two relationships (say an ex-wife on one side and a
+ * current wife on the other) sit between the two without the lines crossing.
+ *
+ * The family points are dropped before rendering — only people are drawn.
  */
 export function layoutTree(data: TreeData): {
   nodes: Node<PersonNodeData>[];
   edges: Edge[];
 } {
   const g = new dagre.graphlib.Graph();
-  g.setGraph({ rankdir: "TB", nodesep: 48, ranksep: 110, marginx: 40, marginy: 40 });
+  // ranksep is halved because the invisible family point adds a rank of its
+  // own between each generation.
+  g.setGraph({ rankdir: "TB", nodesep: 42, ranksep: 54, marginx: 40, marginy: 40 });
   g.setDefaultEdgeLabel(() => ({}));
 
+  const peopleIds = new Set(data.people.map((p) => p.id));
   for (const p of data.people) {
     g.setNode(p.id, { width: NODE_W, height: NODE_H });
   }
+
+  // --- group children by the exact set of parents they have ---
+  const parentsOfChild = new Map<string, string[]>();
   for (const e of data.parentEdges) {
-    g.setEdge(e.parentId, e.childId);
+    if (!peopleIds.has(e.parentId) || !peopleIds.has(e.childId)) continue;
+    if (!parentsOfChild.has(e.childId)) parentsOfChild.set(e.childId, []);
+    parentsOfChild.get(e.childId)!.push(e.parentId);
   }
 
-  // Sibling links with no shared parents: keep the pair on the same row.
-  const siblingLinks = data.siblingEdges ?? [];
+  const familyKey = (parentIds: string[]) => `fam:${[...parentIds].sort().join("+")}`;
+  const families = new Map<string, string[]>(); // key -> parent ids
+
+  for (const [, parentIds] of parentsOfChild) {
+    families.set(familyKey(parentIds), [...new Set(parentIds)]);
+  }
+
+  // Couples with no children still get a point, so they stay side by side.
+  for (const s of data.partnerships) {
+    if (!peopleIds.has(s.aId) || !peopleIds.has(s.bId)) continue;
+    const key = familyKey([s.aId, s.bId]);
+    if (!families.has(key)) families.set(key, [s.aId, s.bId]);
+  }
+
+  for (const [key, parentIds] of families) {
+    g.setNode(key, { width: 1, height: 1 });
+    for (const pid of parentIds) {
+      // Couples pull harder than single parents, keeping partners adjacent.
+      g.setEdge(pid, key, { weight: parentIds.length > 1 ? 3 : 1 });
+    }
+  }
+  for (const [childId, parentIds] of parentsOfChild) {
+    g.setEdge(familyKey(parentIds), childId, { weight: 2 });
+  }
 
   dagre.layout(g);
 
@@ -37,7 +73,8 @@ export function layoutTree(data: TreeData): {
     data.parentEdges.filter((e) => e.adoption).map((e) => e.childId)
   );
 
-  // Align explicitly-linked siblings vertically so they read as one generation.
+  // Siblings linked without known parents: pull them onto the same row.
+  const siblingLinks = data.siblingEdges ?? [];
   const rowOverride = new Map<string, number>();
   for (const link of siblingLinks) {
     const a = g.node(link.aId) as { y: number } | undefined;
@@ -48,101 +85,127 @@ export function layoutTree(data: TreeData): {
     rowOverride.set(link.bId, y);
   }
 
-  // Keep couples and siblings side by side.
+  // ------------------------------------------------------------------
+  // Horizontal placement.
   //
-  // dagre decides the left-to-right order of each generation from parent/child
-  // links alone, so a spouse can end up wedged between two siblings. We don't
-  // move anyone to a new row or change the spacing — we just work out a nicer
-  // order within each row and hand the same x slots out in that order.
-  const placed = new Map<string, { x: number; y: number }>();
+  // dagre decides which generation everyone belongs to, and that part it does
+  // well. Left-to-right order is ours to fix: we go down the tree one
+  // generation at a time, put each person near the middle of their parents,
+  // keep couples and siblings touching, then space the row out so nothing
+  // overlaps.
+  // ------------------------------------------------------------------
+  const H_GAP = 42;
+  const place = new Map<string, { x: number; y: number }>();
   for (const p of data.people) {
     const node = g.node(p.id) as { x: number; y: number } | undefined;
     if (!node) continue;
-    placed.set(p.id, { x: node.x, y: rowOverride.get(p.id) ?? node.y });
+    place.set(p.id, { x: node.x, y: rowOverride.get(p.id) ?? node.y });
   }
 
-  // Who should sit next to whom, strongest tie first.
-  const neighbours = new Map<string, Set<string>>();
-  const addNeighbour = (a: string, b: string) => {
-    if (!placed.has(a) || !placed.has(b)) return;
-    if (placed.get(a)!.y !== placed.get(b)!.y) return; // different generations
-    if (!neighbours.has(a)) neighbours.set(a, new Set());
-    if (!neighbours.has(b)) neighbours.set(b, new Set());
-    neighbours.get(a)!.add(b);
-    neighbours.get(b)!.add(a);
+  // Who must stay next to whom, within one generation.
+  const sideBySide = new Map<string, Set<string>>();
+  const pairUp = (a: string, b: string) => {
+    if (!place.has(a) || !place.has(b)) return;
+    if (place.get(a)!.y !== place.get(b)!.y) return;
+    if (!sideBySide.has(a)) sideBySide.set(a, new Set());
+    if (!sideBySide.has(b)) sideBySide.set(b, new Set());
+    sideBySide.get(a)!.add(b);
+    sideBySide.get(b)!.add(a);
   };
-  for (const s of data.partnerships) addNeighbour(s.aId, s.bId);
-  for (const link of siblingLinks) addNeighbour(link.aId, link.bId);
+  for (const s of data.partnerships) pairUp(s.aId, s.bId);
+  for (const link of siblingLinks) pairUp(link.aId, link.bId);
 
-  // Siblings that share a parent should also cluster together.
-  const childrenByParent = new Map<string, string[]>();
-  for (const e of data.parentEdges) {
-    if (!childrenByParent.has(e.parentId)) childrenByParent.set(e.parentId, []);
-    childrenByParent.get(e.parentId)!.push(e.childId);
-  }
-  for (const kids of childrenByParent.values()) {
-    for (let i = 1; i < kids.length; i++) addNeighbour(kids[i - 1], kids[i]);
-  }
+  const rows = [...new Set([...place.values()].map((v) => v.y))].sort((a, b) => a - b);
 
-  const byRow = new Map<number, string[]>();
-  for (const [id, pos] of placed) {
-    if (!byRow.has(pos.y)) byRow.set(pos.y, []);
-    byRow.get(pos.y)!.push(id);
-  }
+  for (const y of rows) {
+    const ids = [...place.keys()].filter((id) => place.get(id)!.y === y);
 
-  for (const [, ids] of byRow) {
-    // The x positions already chosen for this row, kept exactly as they are.
-    const slots = ids.map((id) => placed.get(id)!.x).sort((a, b) => a - b);
-    const original = [...ids].sort((a, b) => placed.get(a)!.x - placed.get(b)!.x);
+    // Where would each person ideally sit? Under their parents if we've
+    // already placed them, otherwise wherever dagre had them.
+    const anchorOf = new Map<string, number>();
+    for (const id of ids) {
+      const parents = (parentsOfChild.get(id) ?? []).filter((pid) => {
+        const pp = place.get(pid);
+        return pp && pp.y < y;
+      });
+      anchorOf.set(
+        id,
+        parents.length > 0
+          ? parents.reduce((sum, pid) => sum + place.get(pid)!.x, 0) / parents.length
+          : place.get(id)!.x
+      );
+    }
 
-    // Walk each connected group as a chain, starting from an end, so a couple
-    // stays joined and siblings line up next to each other.
-    const seen = new Set<string>();
+    // Order the row by that ideal, then pull partners/siblings together.
+    const sorted = [...ids].sort((a, b) => anchorOf.get(a)! - anchorOf.get(b)!);
     const ordered: string[] = [];
-    const walk = (id: string) => {
-      if (seen.has(id)) return;
-      seen.add(id);
-      ordered.push(id);
-      const next = [...(neighbours.get(id) ?? [])]
-        .filter((n) => !seen.has(n) && placed.has(n))
-        .sort((a, b) => placed.get(a)!.x - placed.get(b)!.x);
-      for (const n of next) walk(n);
-    };
-    for (const id of original) {
-      if (seen.has(id)) continue;
-      // Prefer starting at the edge of a group rather than the middle.
-      const group = [id];
-      const stack = [id];
-      const local = new Set([id]);
-      while (stack.length) {
+    const done = new Set<string>();
+
+    for (const seed of sorted) {
+      if (done.has(seed)) continue;
+
+      // Collect everyone joined to this person by marriage or sibling link.
+      const group: string[] = [];
+      const inGroup = new Set<string>([seed]);
+      const stack = [seed];
+      while (stack.length > 0) {
         const cur = stack.pop()!;
-        for (const n of neighbours.get(cur) ?? []) {
-          if (!local.has(n) && placed.has(n)) {
-            local.add(n);
-            group.push(n);
+        group.push(cur);
+        for (const n of sideBySide.get(cur) ?? []) {
+          if (!inGroup.has(n) && place.has(n) && place.get(n)!.y === y) {
+            inGroup.add(n);
             stack.push(n);
           }
         }
       }
+
+      // Walk the group as a chain starting from one of its ends, so someone
+      // with two partners (an ex and a current spouse) ends up in the middle
+      // rather than off to one side.
       const start =
-        group
-          .filter((m) => !seen.has(m))
+        [...group].sort(
+          (a, b) =>
+            (sideBySide.get(a)?.size ?? 0) - (sideBySide.get(b)?.size ?? 0) ||
+            anchorOf.get(a)! - anchorOf.get(b)!
+        )[0] ?? seed;
+
+      const walk = (id: string) => {
+        if (done.has(id)) return;
+        done.add(id);
+        ordered.push(id);
+        const next = [...(sideBySide.get(id) ?? [])]
+          .filter((n) => !done.has(n) && inGroup.has(n))
           .sort(
             (a, b) =>
-              (neighbours.get(a)?.size ?? 0) - (neighbours.get(b)?.size ?? 0) ||
-              placed.get(a)!.x - placed.get(b)!.x
-          )[0] ?? id;
+              (sideBySide.get(a)?.size ?? 0) - (sideBySide.get(b)?.size ?? 0) ||
+              anchorOf.get(a)! - anchorOf.get(b)!
+          );
+        // Follow the branch that dead-ends last, keeping the chain unbroken.
+        for (const n of next.reverse()) walk(n);
+      };
       walk(start);
     }
 
+    // Space them out left to right, never closer than one card plus a gap.
+    const step = NODE_W + H_GAP;
+    const xs: number[] = [];
+    for (let i = 0; i < ordered.length; i++) {
+      const want = anchorOf.get(ordered[i])!;
+      xs.push(i === 0 ? want : Math.max(want, xs[i - 1] + step));
+    }
+    // Nudge the row back so it stays centred under the parents above.
+    const wantedCentre =
+      ordered.reduce((sum, id) => sum + anchorOf.get(id)!, 0) / ordered.length;
+    const actualCentre = xs.reduce((a, b) => a + b, 0) / xs.length;
+    const shift = wantedCentre - actualCentre;
     ordered.forEach((id, i) => {
-      placed.get(id)!.x = slots[i];
+      place.get(id)!.x = xs[i] + shift;
     });
   }
 
   const nodes: Node<PersonNodeData>[] = data.people.map((p) => {
-    const node = g.node(p.id) as { x: number; y: number };
-    const pos = placed.get(p.id) ?? { x: node.x, y: rowOverride.get(p.id) ?? node.y };
+    const fallback = g.node(p.id) as { x: number; y: number };
+    const pos = place.get(p.id) ?? { x: fallback.x, y: fallback.y };
     return {
       id: p.id,
       type: "person",
@@ -161,7 +224,11 @@ export function layoutTree(data: TreeData): {
       sourceHandle: "s-bottom",
       targetHandle: "t-top",
       type: "smoothstep",
-      style: { stroke: "#94a3b8", strokeWidth: 1.8 },
+      style: {
+        stroke: "#94a3b8",
+        strokeWidth: 1.8,
+        strokeDasharray: e.adoption ? "5 4" : undefined,
+      },
     });
   }
 
