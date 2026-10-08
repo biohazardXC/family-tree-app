@@ -1,7 +1,6 @@
-import ReadOnlyTree from "@/components/ReadOnlyTree";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
+/** The read-only tree moved to /share. Old links keep working. */
 export default function TreePage() {
-  return <ReadOnlyTree />;
+  redirect("/share");
 }

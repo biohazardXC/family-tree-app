@@ -146,12 +146,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
     resolved.set(selfItem.key, selfId);
 
-    // 2. Spouse
+    // 2. Spouses (there may be a previous partner as well as a current one)
     let spouseId: string | null = null;
-    for (const item of byRole("spouse")) {
+    const spouseItems = byRole("spouse");
+    for (const item of spouseItems) {
       const pid = await resolve(item);
       if (pid) {
-        spouseId = pid;
+        if (spouseId === null) spouseId = pid;
         resolved.set(item.key, pid);
         if (pid !== selfId && !(await partnershipExists(selfId, pid))) {
           await db.insert(partnerships).values({
@@ -175,7 +176,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     // Those parents belong to self's existing sibling group too.
     if (addedParent) await syncGroupParents(selfId);
 
-    // 4. Children (of self, and of spouse if known)
+    // 4. Children — of self, plus whichever partner the invitee named.
     for (const item of byRole("child")) {
       const cid = await resolve(item);
       if (!cid) continue;
@@ -183,8 +184,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       if (cid !== selfId && !(await parentEdgeExists(selfId, cid))) {
         await db.insert(parentEdges).values({ parentId: selfId, childId: cid, adoption });
       }
-      if (spouseId && spouseId !== cid && !(await parentEdgeExists(spouseId, cid))) {
-        await db.insert(parentEdges).values({ parentId: spouseId, childId: cid, adoption });
+
+      // Only attach a second parent when we actually know who it is. Guessing
+      // the current partner would be wrong for children of an earlier one.
+      let otherParentId: string | null = null;
+      if (item.otherParentKey) {
+        otherParentId = resolved.get(item.otherParentKey) ?? null;
+      } else if (spouseItems.length === 1) {
+        // Older submissions, made before the question existed.
+        otherParentId = spouseId;
+      }
+
+      if (otherParentId && otherParentId !== cid && !(await parentEdgeExists(otherParentId, cid))) {
+        await db.insert(parentEdges).values({ parentId: otherParentId, childId: cid, adoption });
       }
     }
 
