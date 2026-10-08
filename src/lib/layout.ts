@@ -103,17 +103,21 @@ export function layoutTree(data: TreeData): {
   }
 
   // Who must stay next to whom, within one generation.
-  const sideBySide = new Map<string, Set<string>>();
-  const pairUp = (a: string, b: string) => {
+  // Marriage binds tighter than being someone's brother or sister: a person
+  // with an ex-partner and a current partner belongs between the two of them,
+  // with their siblings pushed out to the sides.
+  const spouseOf = new Map<string, Set<string>>();
+  const siblingOf = new Map<string, Set<string>>();
+  const pairUp = (map: Map<string, Set<string>>, a: string, b: string) => {
     if (!place.has(a) || !place.has(b)) return;
     if (place.get(a)!.y !== place.get(b)!.y) return;
-    if (!sideBySide.has(a)) sideBySide.set(a, new Set());
-    if (!sideBySide.has(b)) sideBySide.set(b, new Set());
-    sideBySide.get(a)!.add(b);
-    sideBySide.get(b)!.add(a);
+    if (!map.has(a)) map.set(a, new Set());
+    if (!map.has(b)) map.set(b, new Set());
+    map.get(a)!.add(b);
+    map.get(b)!.add(a);
   };
-  for (const s of data.partnerships) pairUp(s.aId, s.bId);
-  for (const link of siblingLinks) pairUp(link.aId, link.bId);
+  for (const s of data.partnerships) pairUp(spouseOf, s.aId, s.bId);
+  for (const link of siblingLinks) pairUp(siblingOf, link.aId, link.bId);
 
   const rows = [...new Set([...place.values()].map((v) => v.y))].sort((a, b) => a - b);
 
@@ -137,54 +141,69 @@ export function layoutTree(data: TreeData): {
     }
 
     // Order the row by that ideal, then pull partners/siblings together.
-    const sorted = [...ids].sort((a, b) => anchorOf.get(a)! - anchorOf.get(b)!);
-    const ordered: string[] = [];
-    const done = new Set<string>();
+    // Sibling-linked people with no parents of their own have nothing to be
+    // anchored to, so borrow the average of the group they belong to.
+    for (const id of ids) {
+      const sibs = [...(siblingOf.get(id) ?? [])].filter((n) => ids.includes(n));
+      if (sibs.length === 0) continue;
+      const known = [id, ...sibs].filter((n) => (parentsOfChild.get(n) ?? []).length > 0);
+      if (known.length > 0 && (parentsOfChild.get(id) ?? []).length === 0) {
+        anchorOf.set(id, known.reduce((s, n) => s + anchorOf.get(n)!, 0) / known.length);
+      }
+    }
 
-    for (const seed of sorted) {
-      if (done.has(seed)) continue;
+    // Step 1: glue married couples into blocks that can't be split up.
+    const blocks: string[][] = [];
+    const inBlock = new Set<string>();
+    for (const seed of [...ids].sort((a, b) => anchorOf.get(a)! - anchorOf.get(b)!)) {
+      if (inBlock.has(seed)) continue;
 
-      // Collect everyone joined to this person by marriage or sibling link.
-      const group: string[] = [];
-      const inGroup = new Set<string>([seed]);
+      const members = new Set<string>([seed]);
       const stack = [seed];
       while (stack.length > 0) {
         const cur = stack.pop()!;
-        group.push(cur);
-        for (const n of sideBySide.get(cur) ?? []) {
-          if (!inGroup.has(n) && place.has(n) && place.get(n)!.y === y) {
-            inGroup.add(n);
+        for (const n of spouseOf.get(cur) ?? []) {
+          if (!members.has(n) && ids.includes(n)) {
+            members.add(n);
             stack.push(n);
           }
         }
       }
 
-      // Walk the group as a chain starting from one of its ends, so someone
-      // with two partners (an ex and a current spouse) ends up in the middle
-      // rather than off to one side.
-      const start =
-        [...group].sort(
-          (a, b) =>
-            (sideBySide.get(a)?.size ?? 0) - (sideBySide.get(b)?.size ?? 0) ||
-            anchorOf.get(a)! - anchorOf.get(b)!
-        )[0] ?? seed;
-
+      // Walk the couple chain from one end, so somebody with two partners
+      // (an ex and a current spouse) sits between them.
+      const chain: string[] = [];
+      const seen = new Set<string>();
+      const start = [...members].sort(
+        (a, b) =>
+          (spouseOf.get(a)?.size ?? 0) - (spouseOf.get(b)?.size ?? 0) ||
+          anchorOf.get(a)! - anchorOf.get(b)!
+      )[0];
       const walk = (id: string) => {
-        if (done.has(id)) return;
-        done.add(id);
-        ordered.push(id);
-        const next = [...(sideBySide.get(id) ?? [])]
-          .filter((n) => !done.has(n) && inGroup.has(n))
-          .sort(
-            (a, b) =>
-              (sideBySide.get(a)?.size ?? 0) - (sideBySide.get(b)?.size ?? 0) ||
-              anchorOf.get(a)! - anchorOf.get(b)!
-          );
-        // Follow the branch that dead-ends last, keeping the chain unbroken.
-        for (const n of next.reverse()) walk(n);
+        if (seen.has(id)) return;
+        seen.add(id);
+        chain.push(id);
+        const next = [...(spouseOf.get(id) ?? [])]
+          .filter((n) => !seen.has(n) && members.has(n))
+          .sort((a, b) => anchorOf.get(a)! - anchorOf.get(b)!);
+        for (const n of next) walk(n);
       };
       walk(start);
+
+      for (const m of chain) inBlock.add(m);
+      blocks.push(chain);
     }
+
+    // Step 2: order the blocks. Use only members who actually have parents,
+    // so a spouse who married in doesn't drag the block sideways.
+    const blockAnchor = (block: string[]) => {
+      const rooted = block.filter((id) => (parentsOfChild.get(id) ?? []).length > 0);
+      const use = rooted.length > 0 ? rooted : block;
+      return use.reduce((sum, id) => sum + anchorOf.get(id)!, 0) / use.length;
+    };
+    blocks.sort((a, b) => blockAnchor(a) - blockAnchor(b));
+
+    const ordered = blocks.flat();
 
     // Space them out left to right, never closer than one card plus a gap.
     const step = NODE_W + H_GAP;
