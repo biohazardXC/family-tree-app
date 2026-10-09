@@ -12,6 +12,7 @@ export interface PersonDTO {
   deathDate: string | null;
   deathPlace: string | null;
   notes: string | null;
+  photoUrl: string | null;
   isDemo: boolean;
 }
 
@@ -80,6 +81,7 @@ export interface PersonDraft {
   deathDate?: string | null;
   deathPlace?: string | null;
   notes?: string | null;
+  photoUrl?: string | null;
 }
 
 /** One person in a submission. Relations are relative to the "self" item. */

@@ -93,6 +93,15 @@ export interface Strings {
   stepSiblings: string;
   stepReview: string;
 
+  // photos
+  photoAdd: string;
+  photoReplace: string;
+  photoRemove: string;
+  photoUploading: string;
+  photoFailed: string;
+  photoHint: string;
+  photoStepTitle: string;
+
   youTitle: string;
   youSubtitle: string;
 
@@ -237,6 +246,14 @@ const en: Strings = {
   stepChildren: "Children",
   stepSiblings: "Siblings",
   stepReview: "Review",
+
+  photoAdd: "Add a photo",
+  photoReplace: "Change photo",
+  photoRemove: "Remove photo",
+  photoUploading: "Sending…",
+  photoFailed: "That photo didn't upload. Please try again.",
+  photoHint: "Optional. Any photo of them is lovely — old ones especially.",
+  photoStepTitle: "Photo",
 
   youTitle: "About you",
   youSubtitle: "Let's start with your own details.",
@@ -387,6 +404,14 @@ const af: Strings = {
   stepChildren: "Kinders",
   stepSiblings: "Broers en susters",
   stepReview: "Nasien",
+
+  photoAdd: "Laai 'n foto op",
+  photoReplace: "Verander foto",
+  photoRemove: "Verwyder foto",
+  photoUploading: "Besig om te stuur…",
+  photoFailed: "Die foto is nie opgelaai nie. Probeer asseblief weer.",
+  photoHint: "Opsioneel. Enige foto van hulle is wonderlik — veral ou foto's.",
+  photoStepTitle: "Foto",
 
   youTitle: "Oor jou",
   youSubtitle: "Kom ons begin by jou eie besonderhede.",

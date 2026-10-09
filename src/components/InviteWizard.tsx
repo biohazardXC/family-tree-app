@@ -7,6 +7,7 @@ import { fullName, lifespan } from "@/lib/person-utils";
 import { formatDate } from "@/lib/dates";
 import { LANGUAGES, stringsFor, type Lang, type Strings } from "@/lib/invite-i18n";
 import DateField from "./DateField";
+import PhotoField from "./PhotoField";
 
 /**
  * The invitee's form. Design goals:
@@ -25,6 +26,7 @@ interface Draft {
   birthPlace: string;
   deathDate: string;
   deathPlace: string;
+  photoUrl: string;
 }
 
 interface Entry {
@@ -47,6 +49,7 @@ const emptyDraft = (): Draft => ({
   birthPlace: "",
   deathDate: "",
   deathPlace: "",
+  photoUrl: "",
 });
 
 const emptyEntry = (): Entry => ({
@@ -253,6 +256,12 @@ function EntryFields({
 
   return (
     <div className="space-y-4">
+      <PhotoField
+        value={d.photoUrl}
+        onChange={set("photoUrl")}
+        placeholder={(d.firstName[0] ?? "").toUpperCase()}
+        lang={lang}
+      />
       <Field label={t.firstName} value={d.firstName} onChange={set("firstName")} />
       <Field label={t.surname} value={d.lastName} onChange={set("lastName")} placeholder={t.surnameHint} />
       <Field
@@ -394,6 +403,7 @@ export default function InviteWizard({ token }: { token: string }) {
             birthPlace: e.draft.birthPlace || null,
             deathDate: e.draft.deathDate || null,
             deathPlace: e.draft.deathPlace || null,
+            photoUrl: e.draft.photoUrl || null,
           },
           linkedTo: e.linkedTo,
           ...extra,

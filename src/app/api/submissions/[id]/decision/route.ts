@@ -125,6 +125,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           deathDate: clean(p.deathDate),
           deathPlace: clean(p.deathPlace),
           notes: clean(p.notes),
+          photoUrl: clean(p.photoUrl),
         })
         .returning();
       return created.id;

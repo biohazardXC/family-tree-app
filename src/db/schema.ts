@@ -14,6 +14,8 @@ export const people = sqliteTable("people", {
   deathDate: text("death_date"),
   deathPlace: text("death_place"),
   notes: text("notes"),
+  /** Public URL of their photo — Vercel Blob in production, /uploads locally. */
+  photoUrl: text("photo_url"),
   isDemo: integer("is_demo", { mode: "boolean" }).notNull().default(false),
   createdAt: integer("created_at", { mode: "timestamp_ms" })
     .notNull()

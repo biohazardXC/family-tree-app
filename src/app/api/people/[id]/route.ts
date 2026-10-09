@@ -15,6 +15,7 @@ const NULLABLE_TEXT_FIELDS = [
   "deathDate",
   "deathPlace",
   "notes",
+  "photoUrl",
 ] as const;
 
 function clean(value: unknown): string | null {

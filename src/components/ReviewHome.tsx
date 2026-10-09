@@ -313,6 +313,10 @@ function ItemCard({
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-2">
+        {p.photoUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={p.photoUrl} alt="" className="h-14 w-14 shrink-0 rounded-full object-cover" />
+        )}
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
             {ROLE_LABEL[item.role] ?? item.role}

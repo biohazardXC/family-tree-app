@@ -32,9 +32,16 @@ export default function PersonNode({ data, selected }: NodeProps<PersonNodeType>
       <Handle id="s-right" type="source" position={Position.Right} className="!invisible" isConnectable={false} />
 
       <div
-        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${avatar}`}
+        className={`flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-semibold ${
+          p.photoUrl ? "bg-slate-100" : avatar
+        }`}
       >
-        {initials(p)}
+        {p.photoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={p.photoUrl} alt="" className="h-full w-full object-cover" />
+        ) : (
+          initials(p)
+        )}
       </div>
 
       <div className="min-w-0 flex-1">

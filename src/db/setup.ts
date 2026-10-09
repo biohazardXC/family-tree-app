@@ -13,6 +13,7 @@ export const SCHEMA_STATEMENTS = [
      death_date TEXT,
      death_place TEXT,
      notes TEXT,
+     photo_url TEXT,
      is_demo INTEGER NOT NULL DEFAULT 0,
      created_at INTEGER NOT NULL,
      updated_at INTEGER NOT NULL
@@ -84,6 +85,12 @@ export async function runSetup(): Promise<SetupResult> {
     if (!edgeCols.rows.some((c) => c.name === "adoption")) {
       await client.execute("ALTER TABLE parent_edges ADD COLUMN adoption TEXT;");
       messages.push("Added 'adoption' column to parent_edges.");
+    }
+
+    const peopleCols = await client.execute("PRAGMA table_info('people')");
+    if (!peopleCols.rows.some((c) => c.name === "photo_url")) {
+      await client.execute("ALTER TABLE people ADD COLUMN photo_url TEXT;");
+      messages.push("Added 'photo_url' column to people.");
     }
 
     const inviteCols = await client.execute("PRAGMA table_info('invites')");

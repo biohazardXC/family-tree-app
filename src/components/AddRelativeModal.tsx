@@ -5,6 +5,7 @@ import type { MatchResult, PersonDTO, RelationType } from "@/lib/types";
 import { fullName } from "@/lib/person-utils";
 import { formatDate } from "@/lib/dates";
 import DateField from "./DateField";
+import PhotoField from "./PhotoField";
 
 export type ModalKind = RelationType | "root";
 
@@ -37,6 +38,7 @@ export default function AddRelativeModal({ kind, anchor, onClose, onCreated }: P
     deathDate: "",
     deathPlace: "",
     notes: "",
+    photoUrl: "",
   });
   const [partnershipStatus, setPartnershipStatus] = useState("married");
   const [adoption, setAdoption] = useState("");
@@ -228,6 +230,15 @@ export default function AddRelativeModal({ kind, anchor, onClose, onCreated }: P
           <label className="block text-xs font-medium text-slate-500">
             Maiden name
             <input className={`mt-1 ${inputClass}`} value={form.maidenName} onChange={set("maidenName")} />
+          </label>
+          <label className="block">
+            <span className="text-xs font-medium text-slate-500">Photo</span>
+            <div className="mt-1">
+              <PhotoField
+                value={form.photoUrl}
+                onChange={(url) => setForm((f) => ({ ...f, photoUrl: url }))}
+              />
+            </div>
           </label>
           <label className="block text-xs font-medium text-slate-500">
             Gender
