@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { MatchResult, PersonDraft } from "@/lib/types";
 import { fullName, lifespan } from "@/lib/person-utils";
+import { formatDate } from "@/lib/dates";
+import DateField from "./DateField";
 
 /**
  * The invitee's form. Design goals:
@@ -239,12 +241,11 @@ function EntryFields({
         onChange={set("maidenName")}
       />
       <GenderSelect value={d.gender} onChange={(v) => onChange({ ...entry, draft: { ...d, gender: v } })} />
-      <Field
-        label="Year of birth"
-        hint="A year is fine — a full date is even better"
+      <DateField
+        label="Date of birth"
+        hint="If you only know the year, just fill in the year."
         value={d.birthDate}
         onChange={set("birthDate")}
-        placeholder="e.g. 1936 or 12 March 1936"
       />
       <Field label="Place of birth" value={d.birthPlace} onChange={set("birthPlace")} placeholder="e.g. Kroonstad" />
 
@@ -254,7 +255,7 @@ function EntryFields({
             Have they passed away?
           </summary>
           <div className="mt-3 space-y-3">
-            <Field label="Year of death" value={d.deathDate} onChange={set("deathDate")} placeholder="e.g. 2018" />
+            <DateField label="Date of death" value={d.deathDate} onChange={set("deathDate")} />
             <Field label="Place of death" value={d.deathPlace} onChange={set("deathPlace")} placeholder="e.g. Johannesburg" />
           </div>
         </details>
@@ -274,7 +275,7 @@ const ADOPTION_OPTIONS: [string, string][] = [
   ["foster", "Foster child"],
 ];
 
-const STEPS = ["You", "Partner", "Parents", "Children", "Siblings", "Review"] as const;
+const STEPS = ["You", "Partner", "Parents", "Grandparents", "Children", "Siblings", "Review"] as const;
 
 export default function InviteWizard({ token }: { token: string }) {
   const [phase, setPhase] = useState<"loading" | "welcome" | "form" | "done" | "invalid" | "already">("loading");
@@ -286,6 +287,11 @@ export default function InviteWizard({ token }: { token: string }) {
   const [self, setSelf] = useState<Entry>(emptyEntry);
   const [partners, setPartners] = useState<Entry[]>([]);
   const [parents, setParents] = useState<(Entry | null)[]>([null, null]);
+  // Grandparents hang off a parent slot: [parent index][0 = mother, 1 = father].
+  const [grandparents, setGrandparents] = useState<(Entry | null)[][]>([
+    [null, null],
+    [null, null],
+  ]);
   const [children, setChildren] = useState<Entry[]>([]);
   const [siblings, setSiblings] = useState<Entry[]>([]);
 
@@ -339,7 +345,23 @@ export default function InviteWizard({ token }: { token: string }) {
         push(sp, "spouse", { partnershipStatus: sp.partnershipStatus }, key);
       });
 
-      for (const p of parents) if (p) push(p, "parent");
+      // Stable keys so each grandparent can point at the right parent.
+      const parentKeys = new Map<number, string>();
+      parents.forEach((p, i) => {
+        if (!p || !p.draft.firstName.trim()) return;
+        const key = `parent-${i}`;
+        parentKeys.set(i, key);
+        push(p, "parent", {}, key);
+      });
+
+      grandparents.forEach((row, pi) => {
+        const ofParentKey = parentKeys.get(pi) ?? null;
+        if (!ofParentKey) return; // no parent given, so nothing to attach to
+        row.forEach((gp, gi) => {
+          if (!gp) return;
+          push(gp, "grandparent", { ofParentKey }, `grandparent-${pi}-${gi}`);
+        });
+      });
       for (const c of children) {
         const idx = c.otherParent === "" ? null : Number(c.otherParent);
         push(c, "child", {
@@ -401,6 +423,10 @@ export default function InviteWizard({ token }: { token: string }) {
           <p className="mt-2 text-sm text-slate-500">
             Your family information has been sent for review. Once it&apos;s approved, it will
             appear in the family tree.
+          </p>
+          <p className="mx-auto mt-4 max-w-sm text-sm text-slate-500">
+            Remembered more — great-grandparents, or another branch? Ask for a
+            second link and add them separately. Nothing here needs redoing.
           </p>
           <Link
             href="/tree"
@@ -645,6 +671,89 @@ export default function InviteWizard({ token }: { token: string }) {
       )}
 
       {step === 3 && (
+        <StepWrap
+          title="Your grandparents"
+          subtitle="Your parents' parents. Even just a name and a year helps enormously."
+        >
+          {parents.every((p) => p === null) ? (
+            <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-center">
+              <p className="text-sm text-slate-600">
+                Go back a step and add a parent first — then we can put their
+                mother and father in the right place.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {parents.map((parent, pi) =>
+                parent === null ? null : (
+                  <div key={pi} className="space-y-4">
+                    <h3 className="text-sm font-semibold text-slate-700">
+                      {parent.draft.firstName.trim()
+                        ? `${parent.draft.firstName.trim()}'s parents`
+                        : `Parent ${pi + 1}'s parents`}
+                    </h3>
+
+                    {[0, 1].map((gi) => {
+                      const gp = grandparents[pi]?.[gi] ?? null;
+                      const role = gi === 0 ? "Mother" : "Father";
+                      const setGp = (e: Entry | null) =>
+                        setGrandparents((prev) =>
+                          prev.map((row, r) =>
+                            r === pi ? row.map((x, c) => (c === gi ? e : x)) : row
+                          )
+                        );
+                      return (
+                        <div
+                          key={gi}
+                          className="rounded-2xl border border-slate-200 bg-white p-4"
+                        >
+                          <div className="mb-3 flex items-center justify-between">
+                            <span className="font-medium text-slate-800">{role}</span>
+                            {gp !== null && (
+                              <button
+                                type="button"
+                                onClick={() => setGp(null)}
+                                className="text-xs font-medium text-rose-500 hover:underline"
+                              >
+                                Remove
+                              </button>
+                            )}
+                          </div>
+                          {gp === null ? (
+                            <button
+                              type="button"
+                              onClick={() => setGp(emptyEntry())}
+                              className="w-full rounded-xl border border-dashed border-slate-300 px-4 py-4 text-sm font-medium text-slate-500 hover:border-emerald-400 hover:text-emerald-700"
+                            >
+                              + Add {role.toLowerCase()}
+                            </button>
+                          ) : (
+                            <EntryFields entry={gp} onChange={setGp} showPassed />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )
+              )}
+            </div>
+          )}
+
+          <div className="mt-6 rounded-2xl border border-sky-200 bg-sky-50 p-4">
+            <p className="text-sm font-medium text-sky-900">
+              Do you know your great-grandparents?
+            </p>
+            <p className="mt-1 text-sm text-sky-800">
+              We keep this form short on purpose, so we stop at grandparents.
+              If you can go back further, reply to whoever sent you this link
+              and ask for a second link — you can fill in that older
+              generation on its own, without holding this one up.
+            </p>
+          </div>
+        </StepWrap>
+      )}
+
+      {step === 4 && (
         <StepWrap title="Your children" subtitle="Each child, and how they joined your family.">
           <div className="space-y-6">
             {children.map((c, i) => (
@@ -745,7 +854,7 @@ export default function InviteWizard({ token }: { token: string }) {
         </StepWrap>
       )}
 
-      {step === 4 && (
+      {step === 5 && (
         <StepWrap title="Your siblings" subtitle="Brothers and sisters — including half- or step-siblings.">
           <div className="space-y-6">
             {siblings.map((s, i) => (
@@ -778,7 +887,7 @@ export default function InviteWizard({ token }: { token: string }) {
         </StepWrap>
       )}
 
-      {step === 5 && (
+      {step === 6 && (
         <StepWrap title="Ready to send" subtitle="Here's everything you've told us. Tap a section to go back and change it.">
           <ReviewList
             entries={[
@@ -884,7 +993,7 @@ function ReviewList({
                 {entry.linkedTo
                   ? `Will be linked to ${entry.linkedName} (already in tree)`
                   : entry.draft.birthDate
-                    ? `Born ${entry.draft.birthDate}`
+                    ? `Born ${formatDate(entry.draft.birthDate)}`
                     : "New to the tree"}
                 {entry.adoption ? ` · ${entry.adoption}` : ""}
               </p>

@@ -17,6 +17,7 @@ import PersonNode from "./PersonNode";
 import { layoutTree } from "@/lib/layout";
 import { summarizeRelations } from "@/lib/relations";
 import { fullName, initials, lifespan, yearFromString } from "@/lib/person-utils";
+import { formatDate } from "@/lib/dates";
 import type { PersonDTO, TreeData } from "@/lib/types";
 
 const nodeTypes: NodeTypes = { person: PersonNode };
@@ -116,8 +117,8 @@ function Canvas() {
             </button>
           </div>
           <div className="space-y-3 p-5 text-sm">
-            <Info label="Born" value={[selected.birthDate, selected.birthPlace].filter(Boolean).join(" · ")} />
-            <Info label="Died" value={[selected.deathDate, selected.deathPlace].filter(Boolean).join(" · ")} />
+            <Info label="Born" value={[formatDate(selected.birthDate), selected.birthPlace].filter(Boolean).join(" · ")} />
+            <Info label="Died" value={[formatDate(selected.deathDate), selected.deathPlace].filter(Boolean).join(" · ")} />
             {selected.notes && <Info label="Notes" value={selected.notes} />}
 
             {(selectedRelations.parents.length > 0 ||
