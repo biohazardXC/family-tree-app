@@ -36,7 +36,11 @@ export async function POST(req: Request) {
     const ext = EXTENSIONS[file.type];
     if (!ext) {
       return NextResponse.json(
-        { error: "Please use a JPEG, PNG or WebP image" },
+        {
+          error:
+            `Unsupported image type "${file.type || "unknown"}". ` +
+            "Please use a JPEG, PNG or WebP photo.",
+        },
         { status: 415 }
       );
     }
@@ -62,6 +66,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ url: `/uploads/${name}` });
   } catch (err) {
     console.error("POST /api/upload failed:", err);
-    return NextResponse.json({ error: "Could not save the photo" }, { status: 500 });
+    const detail = err instanceof Error ? err.message : "unknown error";
+    return NextResponse.json({ error: `Could not save the photo: ${detail}` }, { status: 500 });
   }
 }
