@@ -5,6 +5,7 @@ import type { PersonDTO, RelationType } from "@/lib/types";
 import { fullName, initials, lifespan } from "@/lib/person-utils";
 import { formatDate } from "@/lib/dates";
 import DateField from "./DateField";
+import PhotoField from "./PhotoField";
 import type { PersonRelations } from "@/lib/relations";
 
 interface Props {
@@ -40,6 +41,7 @@ function fieldsFrom(p: PersonDTO) {
     deathDate: p.deathDate ?? "",
     deathPlace: p.deathPlace ?? "",
     notes: p.notes ?? "",
+    photoUrl: p.photoUrl ?? "",
   };
 }
 
@@ -119,9 +121,16 @@ export default function PersonPanel({ person, relations, onClose, onAddRelative,
       <div className="flex items-start justify-between gap-3 border-b border-slate-100 p-5">
         <div className="flex min-w-0 items-center gap-3">
           <div
-            className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-base font-semibold ${avatar}`}
+            className={`flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full text-base font-semibold ${
+              person.photoUrl ? "bg-slate-100" : avatar
+            }`}
           >
-            {initials(person)}
+            {person.photoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={person.photoUrl} alt="" className="h-full w-full object-cover" />
+            ) : (
+              initials(person)
+            )}
           </div>
           <div className="min-w-0">
             <h2 className="truncate text-base font-semibold leading-tight">{fullName(person)}</h2>
@@ -155,6 +164,16 @@ export default function PersonPanel({ person, relations, onClose, onAddRelative,
             <label className="block text-xs font-medium text-slate-500">
               Maiden name
               <input className={`mt-1 ${inputClass}`} value={form.maidenName} onChange={set("maidenName")} />
+            </label>
+            <label className="block">
+              <span className="text-xs font-medium text-slate-500">Photo</span>
+              <div className="mt-1">
+                <PhotoField
+                  value={form.photoUrl}
+                  onChange={(url) => setForm((f) => ({ ...f, photoUrl: url }))}
+                  placeholder={initials(person)}
+                />
+              </div>
             </label>
             <label className="block text-xs font-medium text-slate-500">
               Gender

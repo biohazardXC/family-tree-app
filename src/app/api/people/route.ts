@@ -19,6 +19,7 @@ interface CreateBody {
   deathDate?: string;
   deathPlace?: string;
   notes?: string;
+  photoUrl?: string;
   relation?: {
     type: RelationType;
     toId: string;
@@ -66,6 +67,7 @@ export async function POST(req: Request) {
         deathDate: clean(body.deathDate),
         deathPlace: clean(body.deathPlace),
         notes: clean(body.notes),
+        photoUrl: clean(body.photoUrl),
       })
       .returning();
 

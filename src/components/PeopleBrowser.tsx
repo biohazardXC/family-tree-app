@@ -75,11 +75,16 @@ export default function PeopleBrowser() {
             className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-emerald-300"
           >
             <div
-              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
-                AVATAR[p.gender ?? "other"] ?? AVATAR.other
+              className={`flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-semibold ${
+                p.photoUrl ? "bg-slate-100" : AVATAR[p.gender ?? "other"] ?? AVATAR.other
               }`}
             >
-              {initials(p)}
+              {p.photoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={p.photoUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                initials(p)
+              )}
             </div>
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-semibold">{fullName(p)}</div>
