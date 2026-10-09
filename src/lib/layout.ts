@@ -132,6 +132,47 @@ export function layoutTree(data: TreeData): {
   for (const s of data.partnerships) pairUp(spouseOf, s.aId, s.bId);
   for (const link of siblingLinks) pairUp(siblingOf, link.aId, link.bId);
 
+  // ------------------------------------------------------------------
+  // Separate families must not get shuffled together.
+  //
+  // Two branches that share no relationship at all can easily end up in the
+  // same generation. Packing a row purely by position interleaves them, and
+  // two strangers standing shoulder to shoulder read as if they're related.
+  // So we work out which people are actually joined to each other — by birth,
+  // marriage or a sibling link — and keep each of those groups whole, with a
+  // wide gap between them.
+  // ------------------------------------------------------------------
+  const GROUP_GAP = 150;
+  const root = new Map<string, string>();
+  const find = (id: string): string => {
+    const r = root.get(id);
+    if (r === undefined || r === id) return id;
+    const top = find(r);
+    root.set(id, top);
+    return top;
+  };
+  const union = (a: string, b: string) => {
+    if (!place.has(a) || !place.has(b)) return;
+    const ra = find(a);
+    const rb = find(b);
+    if (ra !== rb) root.set(ra, rb);
+  };
+  for (const p of data.people) root.set(p.id, p.id);
+  for (const e of data.parentEdges) union(e.parentId, e.childId);
+  for (const s of data.partnerships) union(s.aId, s.bId);
+  for (const link of siblingLinks) union(link.aId, link.bId);
+
+  // Keep a stable left-to-right order for the groups themselves.
+  const groupSeen: string[] = [];
+  for (const p of [...data.people].sort(
+    (a, b) => (place.get(a.id)?.x ?? 0) - (place.get(b.id)?.x ?? 0)
+  )) {
+    if (!place.has(p.id)) continue;
+    const r = find(p.id);
+    if (!groupSeen.includes(r)) groupSeen.push(r);
+  }
+  const groupRank = (id: string) => groupSeen.indexOf(find(id));
+
   const rows = [...new Set([...place.values()].map((v) => v.y))].sort((a, b) => a - b);
 
   for (const y of rows) {
@@ -214,16 +255,31 @@ export function layoutTree(data: TreeData): {
       const use = rooted.length > 0 ? rooted : block;
       return use.reduce((sum, id) => sum + anchorOf.get(id)!, 0) / use.length;
     };
-    blocks.sort((a, b) => blockAnchor(a) - blockAnchor(b));
+    // Unrelated families stay in their own stretch of the row.
+    blocks.sort(
+      (a, b) => groupRank(a[0]) - groupRank(b[0]) || blockAnchor(a) - blockAnchor(b)
+    );
 
     const ordered = blocks.flat();
 
-    // Space them out left to right, never closer than one card plus a gap.
+    // Space them out left to right. Everyone inside a block — a couple, or a
+    // person with two partners — is spaced exactly one card apart so they
+    // read as a unit. Blocks are placed under their own centre of gravity,
+    // and a wider gap opens up where one family ends and the next begins.
     const step = NODE_W + H_GAP;
     const xs: number[] = [];
-    for (let i = 0; i < ordered.length; i++) {
-      const want = anchorOf.get(ordered[i])!;
-      xs.push(i === 0 ? want : Math.max(want, xs[i - 1] + step));
+    let cursor: number | null = null;
+    for (let b = 0; b < blocks.length; b++) {
+      const block = blocks[b];
+      const gap =
+        b > 0 && groupRank(block[0]) !== groupRank(blocks[b - 1][0])
+          ? step + GROUP_GAP
+          : step;
+      const width = (block.length - 1) * step;
+      const wanted = blockAnchor(block) - width / 2;
+      const start: number = cursor === null ? wanted : Math.max(wanted, cursor + gap);
+      for (let i = 0; i < block.length; i++) xs.push(start + i * step);
+      cursor = start + width;
     }
     // Nudge the row back so it stays centred under the parents above.
     const wantedCentre =
