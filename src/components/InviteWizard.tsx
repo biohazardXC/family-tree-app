@@ -327,6 +327,16 @@ export default function InviteWizard({ token }: { token: string }) {
   const [inviteName, setInviteName] = useState("");
   const [lang, setLang] = useState<Lang | null>(null);
   const t = stringsFor(lang ?? "en");
+
+  /** Remember the choice, but never trap anyone in it — see the Shell toggle. */
+  const chooseLang = (code: Lang) => {
+    setLang(code);
+    try {
+      window.localStorage.setItem("rooted-lang", code);
+    } catch {
+      // private browsing — the choice just won't be remembered
+    }
+  };
   const [step, setStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -459,14 +469,7 @@ export default function InviteWizard({ token }: { token: string }) {
             {LANGUAGES.map((l) => (
               <button
                 key={l.code}
-                onClick={() => {
-                  setLang(l.code);
-                  try {
-                    window.localStorage.setItem("rooted-lang", l.code);
-                  } catch {
-                    // private browsing — the choice just won't be remembered
-                  }
-                }}
+                onClick={() => chooseLang(l.code)}
                 className="w-full rounded-2xl border border-slate-200 bg-white px-6 py-5 text-left hover:border-emerald-400 hover:bg-emerald-50"
               >
                 <span className="block text-lg font-bold text-slate-900">{l.label}</span>
@@ -489,7 +492,7 @@ export default function InviteWizard({ token }: { token: string }) {
 
   if (phase === "invalid") {
     return (
-      <Shell t={t}>
+      <Shell t={t} lang={lang} onLang={chooseLang}>
         <div className="py-16 text-center">
           <div className="text-4xl">🔗</div>
           <h1 className="mt-4 text-xl font-semibold">{t.invalidTitle}</h1>
@@ -503,7 +506,7 @@ export default function InviteWizard({ token }: { token: string }) {
 
   if (phase === "already" || phase === "done") {
     return (
-      <Shell t={t}>
+      <Shell t={t} lang={lang} onLang={chooseLang}>
         <div className="py-16 text-center">
           <div className="text-4xl">🎉</div>
           <h1 className="mt-4 text-xl font-semibold">
@@ -528,7 +531,7 @@ export default function InviteWizard({ token }: { token: string }) {
 
   if (phase === "welcome") {
     return (
-      <Shell t={t}>
+      <Shell t={t} lang={lang} onLang={chooseLang}>
         <div className="py-12 text-center">
           <div className="text-5xl">🌳</div>
           <h1 className="mt-5 text-2xl font-bold">{t.welcomeHello(inviteName.split(" ")[0])}</h1>
@@ -600,7 +603,7 @@ export default function InviteWizard({ token }: { token: string }) {
   };
 
   return (
-    <Shell t={t}>
+    <Shell t={t} lang={lang} onLang={chooseLang}>
       {/* progress */}
       <div className="sticky top-0 z-10 -mx-4 mb-6 border-b border-slate-100 bg-slate-50/95 px-4 py-3 backdrop-blur">
         <div className="flex items-center justify-between text-xs font-medium text-slate-500">
@@ -1037,12 +1040,44 @@ export default function InviteWizard({ token }: { token: string }) {
   );
 }
 
-function Shell({ children, t }: { children: React.ReactNode; t: Strings }) {
+function Shell({
+  children,
+  t,
+  lang,
+  onLang,
+}: {
+  children: React.ReactNode;
+  t: Strings;
+  /** Null on the language screen itself, where the toggle would be noise. */
+  lang?: Lang | null;
+  onLang?: (code: Lang) => void;
+}) {
   return (
     <div className="mx-auto w-full max-w-lg px-4 pb-16 pt-6">
       <div className="mb-6 text-center">
         <span className="text-2xl">🌳</span>
         <p className="text-xs font-medium uppercase tracking-widest text-slate-400">{t.brand}</p>
+
+        {/* Changing your mind must always be one tap away, in either language. */}
+        {lang && onLang && (
+          <div className="mt-2 inline-flex overflow-hidden rounded-full border border-slate-200 bg-white text-xs">
+            {LANGUAGES.map((l) => (
+              <button
+                key={l.code}
+                type="button"
+                onClick={() => onLang(l.code)}
+                aria-pressed={lang === l.code}
+                className={`px-3 py-1 font-medium ${
+                  lang === l.code
+                    ? "bg-emerald-600 text-white"
+                    : "text-slate-500 hover:bg-slate-50"
+                }`}
+              >
+                {l.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       {children}
     </div>
