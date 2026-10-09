@@ -105,24 +105,33 @@ export function formatDate(value: string | null | undefined): string {
   return year;
 }
 
-/** Validation message for the three boxes, or null when they're fine. */
-export function dateProblem(parts: DateParts): string | null {
+/**
+ * What's wrong with the three boxes, as a code the caller can translate,
+ * or null when they're fine.
+ */
+export type DateProblem =
+  | { code: "needYear" }
+  | { code: "badYear" }
+  | { code: "needMonth" }
+  | { code: "badMonth" }
+  | { code: "badDay" }
+  | { code: "daysInMonth"; days: number };
+
+export function dateProblem(parts: DateParts): DateProblem | null {
   const { day, month, year } = parts;
   if (!day && !month && !year) return null;
-  if (!year) return "Please give at least a year.";
-  if (!/^\d{4}$/.test(year.trim())) return "The year should be four digits, like 1936.";
-  if (day && !month) return "Please choose a month as well, or clear the day.";
+  if (!year) return { code: "needYear" };
+  if (!/^\d{4}$/.test(year.trim())) return { code: "badYear" };
+  if (day && !month) return { code: "needMonth" };
   if (month) {
     const m = Number(month);
-    if (!Number.isInteger(m) || m < 1 || m > 12) return "The month should be between 1 and 12.";
+    if (!Number.isInteger(m) || m < 1 || m > 12) return { code: "badMonth" };
   }
   if (day) {
     const d = Number(day);
-    if (!Number.isInteger(d) || d < 1 || d > 31) return "The day should be between 1 and 31.";
-    const m = Number(month);
-    const y = Number(year);
-    const inMonth = new Date(y, m, 0).getDate();
-    if (d > inMonth) return `That month only has ${inMonth} days.`;
+    if (!Number.isInteger(d) || d < 1 || d > 31) return { code: "badDay" };
+    const inMonth = new Date(Number(year), Number(month), 0).getDate();
+    if (d > inMonth) return { code: "daysInMonth", days: inMonth };
   }
   return null;
 }
