@@ -165,7 +165,9 @@ export default function PersonPanel({ person, relations, onClose, onAddRelative,
               Maiden name
               <input className={`mt-1 ${inputClass}`} value={form.maidenName} onChange={set("maidenName")} />
             </label>
-            <label className="block">
+            {/* A div, not a label: a label re-triggers the nested file input and
+                the browser cancels the double open. */}
+            <div className="block">
               <span className="text-xs font-medium text-slate-500">Photo</span>
               <div className="mt-1">
                 <PhotoField
@@ -174,7 +176,7 @@ export default function PersonPanel({ person, relations, onClose, onAddRelative,
                   placeholder={initials(person)}
                 />
               </div>
-            </label>
+            </div>
             <label className="block text-xs font-medium text-slate-500">
               Gender
               <select className={`mt-1 ${inputClass}`} value={form.gender} onChange={set("gender")}>

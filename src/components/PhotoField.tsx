@@ -72,11 +72,23 @@ export default function PhotoField({ value, onChange, placeholder, lang = "en" }
       body.append("file", new File([small], "photo.jpg", { type: "image/jpeg" }));
 
       const res = await fetch("/api/upload", { method: "POST", body });
-      const data = (await res.json()) as { url?: string; error?: string };
-      if (!res.ok || !data.url) throw new Error(data.error || t.photoFailed);
+
+      // A failing upload used to show one vague line, which told the user
+      // nothing and told us nothing either. Show whatever the server said.
+      const text = await res.text();
+      let data: { url?: string; error?: string } = {};
+      try {
+        data = JSON.parse(text) as { url?: string; error?: string };
+      } catch {
+        throw new Error(`${t.photoFailed} (${res.status})`);
+      }
+      if (!res.ok || !data.url) {
+        throw new Error(data.error ? `${data.error} (${res.status})` : `${t.photoFailed} (${res.status})`);
+      }
 
       onChange(data.url);
     } catch (err) {
+      console.error("Photo upload failed:", err);
       setError(err instanceof Error ? err.message : t.photoFailed);
     } finally {
       setBusy(false);
