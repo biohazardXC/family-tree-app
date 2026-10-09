@@ -8,6 +8,7 @@ import {
   parseDateValue,
   type DateParts,
 } from "@/lib/dates";
+import { stringsFor, type Lang } from "@/lib/invite-i18n";
 
 interface Props {
   label: string;
@@ -15,6 +16,8 @@ interface Props {
   /** Stored value: "1936", "1936-03" or "1936-03-12". */
   value: string;
   onChange: (value: string) => void;
+  /** The invite form can be in Afrikaans; the admin screens are English. */
+  lang?: Lang;
 }
 
 const box =
@@ -27,7 +30,8 @@ const box =
  * people genuinely don't know the day their grandmother was born. The year
  * on its own is enough — the day and month are a bonus.
  */
-export default function DateField({ label, hint, value, onChange }: Props) {
+export default function DateField({ label, hint, value, onChange, lang = "en" }: Props) {
+  const t = stringsFor(lang);
   const [parts, setParts] = useState<DateParts>(() => parseDateValue(value));
   const [touched, setTouched] = useState(false);
 
@@ -44,14 +48,27 @@ export default function DateField({ label, hint, value, onChange }: Props) {
     onChange(dateValueFrom(next));
   };
 
-  const problem = touched ? dateProblem(parts) : null;
+  const raw = touched ? dateProblem(parts) : null;
+  const problem = !raw
+    ? null
+    : raw.code === "daysInMonth"
+      ? t.dateDaysInMonth(raw.days)
+      : raw.code === "needYear"
+        ? t.dateNeedYear
+        : raw.code === "badYear"
+          ? t.dateBadYear
+          : raw.code === "needMonth"
+            ? t.dateNeedMonth
+            : raw.code === "badMonth"
+              ? t.dateBadMonth
+              : t.dateBadDay;
   const yearOnly = Boolean(parts.year) && !parts.month && !parts.day;
 
   return (
     <div>
       <div className="flex items-baseline justify-between">
         <span className="text-xs font-medium text-slate-500">{label}</span>
-        <span className="text-[11px] text-slate-400">dd / mm / yyyy</span>
+        <span className="text-[11px] text-slate-400">{t.dateFormat}</span>
       </div>
 
       <div className="mt-1 flex items-center gap-2" onBlur={() => setTouched(true)}>
@@ -90,7 +107,7 @@ export default function DateField({ label, hint, value, onChange }: Props) {
             }}
             className="ml-1 text-xs text-slate-400 hover:text-rose-500"
           >
-            Clear
+            {t.dateClear}
           </button>
         )}
       </div>
@@ -98,7 +115,7 @@ export default function DateField({ label, hint, value, onChange }: Props) {
       {problem ? (
         <p className="mt-1 text-xs text-rose-600">{problem}</p>
       ) : yearOnly ? (
-        <p className="mt-1 text-xs text-slate-400">Just the year is fine.</p>
+        <p className="mt-1 text-xs text-slate-400">{t.dateYearOnly}</p>
       ) : hint ? (
         <p className="mt-1 text-xs text-slate-400">{hint}</p>
       ) : null}

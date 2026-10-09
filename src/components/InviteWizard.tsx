@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { MatchResult, PersonDraft } from "@/lib/types";
 import { fullName, lifespan } from "@/lib/person-utils";
 import { formatDate } from "@/lib/dates";
+import { LANGUAGES, stringsFor, type Lang, type Strings } from "@/lib/invite-i18n";
 import DateField from "./DateField";
 
 /**
@@ -94,14 +95,22 @@ function Field({
   );
 }
 
-function GenderSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function GenderSelect({
+  value,
+  onChange,
+  t,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  t: Strings;
+}) {
   return (
     <div>
-      <span className="text-sm font-semibold text-slate-700">Gender</span>
+      <span className="text-sm font-semibold text-slate-700">{t.gender}</span>
       <div className="mt-1 flex gap-2">
         {[
-          ["female", "Female"],
-          ["male", "Male"],
+          ["female", t.female],
+          ["male", t.male],
         ].map(([v, label]) => (
           <button
             key={v}
@@ -122,7 +131,15 @@ function GenderSelect({ value, onChange }: { value: string; onChange: (v: string
 }
 
 /** Watches what's typed and asks "is this someone we already know?" */
-function MatchPrompt({ entry, onChange }: { entry: Entry; onChange: (e: Entry) => void }) {
+function MatchPrompt({
+  entry,
+  onChange,
+  t,
+}: {
+  entry: Entry;
+  onChange: (e: Entry) => void;
+  t: Strings;
+}) {
   const [matches, setMatches] = useState<MatchResult[]>([]);
   const [checking, setChecking] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -162,13 +179,13 @@ function MatchPrompt({ entry, onChange }: { entry: Entry; onChange: (e: Entry) =
   if (entry.linkedTo) {
     return (
       <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
-        ✓ Already in the tree as <strong>{entry.linkedName}</strong> — we&apos;ll link to them.
+        ✓ {t.matchLinked(entry.linkedName ?? "")}
         <button
           type="button"
           className="ml-2 font-medium text-emerald-700 underline"
           onClick={() => onChange({ ...entry, linkedTo: null, linkedName: null })}
         >
-          Undo
+          {t.matchUndo}
         </button>
       </div>
     );
@@ -176,7 +193,7 @@ function MatchPrompt({ entry, onChange }: { entry: Entry; onChange: (e: Entry) =
 
   if (matches.length === 0) {
     return checking ? (
-      <p className="text-xs text-slate-400">Checking the tree…</p>
+      <p className="text-xs text-slate-400">{t.matchChecking}</p>
     ) : null;
   }
 
@@ -184,11 +201,11 @@ function MatchPrompt({ entry, onChange }: { entry: Entry; onChange: (e: Entry) =
   return (
     <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
       <p className="text-sm font-medium text-amber-900">
-        We might already know {firstName.trim()}:
+        {t.matchMaybe(firstName.trim())}
       </p>
       <p className="mt-1 text-sm text-amber-800">
         <strong>{fullName(top.person)}</strong>
-        {lifespan(top.person) ? ` (${lifespan(top.person)})` : ""} — {top.score}% match
+        {lifespan(top.person) ? ` (${lifespan(top.person)})` : ""} — {t.matchScore(top.score)}
       </p>
       <div className="mt-2 flex gap-2">
         <button
@@ -202,14 +219,14 @@ function MatchPrompt({ entry, onChange }: { entry: Entry; onChange: (e: Entry) =
           }
           className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
         >
-          Yes, same person
+          {t.matchYes}
         </button>
         <button
           type="button"
           onClick={() => onChange({ ...entry, dismissed: [...entry.dismissed, top.person.id] })}
           className="rounded-full border border-amber-300 px-4 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100"
         >
-          No, different person
+          {t.matchNo}
         </button>
       </div>
     </div>
@@ -221,65 +238,95 @@ function EntryFields({
   onChange,
   showPassed,
   children,
+  t,
+  lang,
 }: {
   entry: Entry;
   onChange: (e: Entry) => void;
   showPassed: boolean;
   children?: React.ReactNode;
+  t: Strings;
+  lang: Lang;
 }) {
   const d = entry.draft;
   const set = (key: keyof Draft) => (v: string) => onChange({ ...entry, draft: { ...d, [key]: v } });
 
   return (
     <div className="space-y-4">
-      <Field label="First name" value={d.firstName} onChange={set("firstName")} placeholder="e.g. Ruth" />
-      <Field label="Surname" value={d.lastName} onChange={set("lastName")} placeholder="Family surname" />
+      <Field label={t.firstName} value={d.firstName} onChange={set("firstName")} />
+      <Field label={t.surname} value={d.lastName} onChange={set("lastName")} placeholder={t.surnameHint} />
       <Field
-        label="Maiden name"
-        hint="Only if their surname changed"
+        label={t.maidenName}
+        hint={t.maidenHint}
         value={d.maidenName}
         onChange={set("maidenName")}
       />
-      <GenderSelect value={d.gender} onChange={(v) => onChange({ ...entry, draft: { ...d, gender: v } })} />
+      <GenderSelect
+        value={d.gender}
+        onChange={(v) => onChange({ ...entry, draft: { ...d, gender: v } })}
+        t={t}
+      />
       <DateField
-        label="Date of birth"
-        hint="If you only know the year, just fill in the year."
+        label={t.birthDate}
+        hint={t.birthDateHint}
         value={d.birthDate}
         onChange={set("birthDate")}
+        lang={lang}
       />
-      <Field label="Place of birth" value={d.birthPlace} onChange={set("birthPlace")} placeholder="e.g. Kroonstad" />
+      <Field
+        label={t.birthPlace}
+        value={d.birthPlace}
+        onChange={set("birthPlace")}
+        placeholder={t.birthPlacePlaceholder}
+      />
 
       {showPassed && (
         <details className="rounded-xl bg-slate-50 p-3">
           <summary className="cursor-pointer text-sm font-medium text-slate-600">
-            Have they passed away?
+            {t.hasPassed}
           </summary>
           <div className="mt-3 space-y-3">
-            <DateField label="Date of death" value={d.deathDate} onChange={set("deathDate")} />
-            <Field label="Place of death" value={d.deathPlace} onChange={set("deathPlace")} placeholder="e.g. Johannesburg" />
+            <DateField label={t.deathDate} value={d.deathDate} onChange={set("deathDate")} lang={lang} />
+            <Field
+              label={t.deathPlace}
+              value={d.deathPlace}
+              onChange={set("deathPlace")}
+              placeholder={t.deathPlacePlaceholder}
+            />
           </div>
         </details>
       )}
 
       {children}
 
-      <MatchPrompt entry={entry} onChange={onChange} />
+      <MatchPrompt entry={entry} onChange={onChange} t={t} />
     </div>
   );
 }
 
-const ADOPTION_OPTIONS: [string, string][] = [
-  ["", "Biological child"],
-  ["adopted", "Adopted"],
-  ["step", "Step-child"],
-  ["foster", "Foster child"],
+const adoptionOptions = (t: Strings): [string, string][] => [
+  ["", t.adoptionBio],
+  ["adopted", t.adoptionAdopted],
+  ["step", t.adoptionStep],
+  ["foster", t.adoptionFoster],
 ];
 
-const STEPS = ["You", "Partner", "Parents", "Grandparents", "Children", "Siblings", "Review"] as const;
+const stepNames = (t: Strings) => [
+  t.stepYou,
+  t.stepPartner,
+  t.stepParents,
+  t.stepGrandparents,
+  t.stepChildren,
+  t.stepSiblings,
+  t.stepReview,
+];
+const STEP_COUNT = 7;
 
 export default function InviteWizard({ token }: { token: string }) {
   const [phase, setPhase] = useState<"loading" | "welcome" | "form" | "done" | "invalid" | "already">("loading");
   const [inviteName, setInviteName] = useState("");
+  const [lang, setLang] = useState<Lang | null>(null);
+  const t = stringsFor(lang ?? "en");
   const [step, setStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -294,6 +341,15 @@ export default function InviteWizard({ token }: { token: string }) {
   ]);
   const [children, setChildren] = useState<Entry[]>([]);
   const [siblings, setSiblings] = useState<Entry[]>([]);
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem("rooted-lang");
+      if (saved === "en" || saved === "af") setLang(saved);
+    } catch {
+      // ignore
+    }
+  }, []);
 
   useEffect(() => {
     fetch(`/api/invite/${token}`)
@@ -390,22 +446,55 @@ export default function InviteWizard({ token }: { token: string }) {
 
   // ---------- screens ----------
 
+  // The language question comes before the welcome screen, so an Afrikaans
+  // relative never has to read a screen of English to find it.
+  if (lang === null && phase !== "loading" && phase !== "invalid") {
+    return (
+      <Shell t={t}>
+        <div className="py-14 text-center">
+          <div className="text-5xl">🌳</div>
+          <h1 className="mt-5 text-xl font-bold text-slate-900">Choose your language</h1>
+          <p className="mt-1 text-xl font-bold text-slate-900">Kies jou taal</p>
+          <div className="mt-8 space-y-3">
+            {LANGUAGES.map((l) => (
+              <button
+                key={l.code}
+                onClick={() => {
+                  setLang(l.code);
+                  try {
+                    window.localStorage.setItem("rooted-lang", l.code);
+                  } catch {
+                    // private browsing — the choice just won't be remembered
+                  }
+                }}
+                className="w-full rounded-2xl border border-slate-200 bg-white px-6 py-5 text-left hover:border-emerald-400 hover:bg-emerald-50"
+              >
+                <span className="block text-lg font-bold text-slate-900">{l.label}</span>
+                <span className="block text-sm text-slate-500">{l.note}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </Shell>
+    );
+  }
+
   if (phase === "loading") {
     return (
       <div className="flex min-h-[70vh] items-center justify-center text-sm text-slate-400">
-        Opening your form…
+        {t.loading}
       </div>
     );
   }
 
   if (phase === "invalid") {
     return (
-      <Shell>
+      <Shell t={t}>
         <div className="py-16 text-center">
           <div className="text-4xl">🔗</div>
-          <h1 className="mt-4 text-xl font-semibold">This link isn&apos;t valid</h1>
+          <h1 className="mt-4 text-xl font-semibold">{t.invalidTitle}</h1>
           <p className="mt-2 text-sm text-slate-500">
-            It may have been mistyped, or a newer link was sent. Please ask for a new one.
+            {t.invalidBody}
           </p>
         </div>
       </Shell>
@@ -414,25 +503,23 @@ export default function InviteWizard({ token }: { token: string }) {
 
   if (phase === "already" || phase === "done") {
     return (
-      <Shell>
+      <Shell t={t}>
         <div className="py-16 text-center">
           <div className="text-4xl">🎉</div>
           <h1 className="mt-4 text-xl font-semibold">
-            {phase === "done" ? "Thank you" : "You're all set"}, {inviteName.split(" ")[0]}!
+            {phase === "done" ? t.doneThanks : t.doneAllSet}, {inviteName.split(" ")[0]}!
           </h1>
           <p className="mt-2 text-sm text-slate-500">
-            Your family information has been sent for review. Once it&apos;s approved, it will
-            appear in the family tree.
+            {t.doneBody}
           </p>
           <p className="mx-auto mt-4 max-w-sm text-sm text-slate-500">
-            Remembered more — great-grandparents, or another branch? Ask for a
-            second link and add them separately. Nothing here needs redoing.
+            {t.doneMore}
           </p>
           <Link
             href="/tree"
             className="mt-6 inline-block rounded-full bg-emerald-600 px-6 py-3 text-base font-semibold text-white hover:bg-emerald-700"
           >
-            View the family tree
+            {t.doneView}
           </Link>
         </div>
       </Shell>
@@ -441,27 +528,25 @@ export default function InviteWizard({ token }: { token: string }) {
 
   if (phase === "welcome") {
     return (
-      <Shell>
+      <Shell t={t}>
         <div className="py-12 text-center">
           <div className="text-5xl">🌳</div>
-          <h1 className="mt-5 text-2xl font-bold">Hello {inviteName.split(" ")[0]}!</h1>
+          <h1 className="mt-5 text-2xl font-bold">{t.welcomeHello(inviteName.split(" ")[0])}</h1>
           <p className="mx-auto mt-3 max-w-sm text-base leading-relaxed text-slate-600">
-            You&apos;re invited to share your family&apos;s information for our family tree.
-            Just your <strong>immediate family</strong> — you, your partner, parents, children
-            and siblings.
+            {t.welcomeBody} <strong>{t.welcomeImmediate}</strong>.
           </p>
           <p className="mx-auto mt-2 max-w-sm text-sm text-slate-400">
-            Takes about 5 minutes. Anything you don&apos;t know, just skip.
+            {t.welcomeTime}
           </p>
           <button
             onClick={() => setPhase("form")}
             className="mt-8 rounded-full bg-emerald-600 px-8 py-4 text-lg font-bold text-white shadow-md hover:bg-emerald-700"
           >
-            Let&apos;s start →
+            {t.welcomeStart}
           </button>
           <div className="mt-4">
             <Link href="/tree" className="text-sm font-medium text-emerald-700 underline">
-              Just show me the family tree
+              {t.welcomeJustView}
             </Link>
           </div>
         </div>
@@ -472,28 +557,28 @@ export default function InviteWizard({ token }: { token: string }) {
   // ---------- form steps ----------
 
   const canContinue = (): string | null => {
-    if (step === 0 && !self.draft.firstName.trim()) return "Please add your first name.";
+    if (step === 0 && !self.draft.firstName.trim()) return t.errNeedFirstName;
     const check = (label: string, e: Entry | null) => {
       if (!e) return null;
       if (!e.draft.firstName.trim() && hasContent(e.draft))
-        return `Please add a first name for the ${label}, or clear the other boxes.`;
+        return t.errNeedNameFor(label);
       return null;
     };
     let err: string | null = null;
     for (let i = 0; i < partners.length; i++) {
-      err = check(`partner ${i + 1}`, partners[i]);
+      err = check(t.labelPartnerN(i + 1), partners[i]);
       if (err) return err;
     }
     for (let i = 0; i < parents.length; i++) {
-      err = check(`parent ${i + 1}`, parents[i]);
+      err = check(t.labelParentN(i + 1), parents[i]);
       if (err) return err;
     }
     err = check("child", null) ?? null;
     for (const c of children) {
-      if (!c.draft.firstName.trim()) return "Please add a first name for each child, or remove them.";
+      if (!c.draft.firstName.trim()) return t.errNeedChildName;
     }
     for (const s of siblings) {
-      if (!s.draft.firstName.trim()) return "Please add a first name for each sibling, or remove them.";
+      if (!s.draft.firstName.trim()) return t.errNeedSiblingName;
     }
     return null;
   };
@@ -505,7 +590,7 @@ export default function InviteWizard({ token }: { token: string }) {
       return;
     }
     setError(null);
-    setStep((s) => Math.min(s + 1, STEPS.length - 1));
+    setStep((s) => Math.min(s + 1, STEP_COUNT - 1));
     window.scrollTo({ top: 0 });
   };
   const back = () => {
@@ -515,40 +600,40 @@ export default function InviteWizard({ token }: { token: string }) {
   };
 
   return (
-    <Shell>
+    <Shell t={t}>
       {/* progress */}
       <div className="sticky top-0 z-10 -mx-4 mb-6 border-b border-slate-100 bg-slate-50/95 px-4 py-3 backdrop-blur">
         <div className="flex items-center justify-between text-xs font-medium text-slate-500">
           <span>
-            Step {step + 1} of {STEPS.length}
+            {t.stepOf(step + 1, STEP_COUNT)}
           </span>
-          <span className="text-slate-400">{inviteName}</span>
+          <span className="text-slate-400">{stepNames(t)[step]}</span>
         </div>
         <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200">
           <div
             className="h-full rounded-full bg-emerald-500 transition-all"
-            style={{ width: `${((step + 1) / STEPS.length) * 100}%` }}
+            style={{ width: `${((step + 1) / STEP_COUNT) * 100}%` }}
           />
         </div>
       </div>
 
       {step === 0 && (
-        <StepWrap title="About you" subtitle="Let's start with your own details.">
-          <EntryFields entry={self} onChange={setSelf} showPassed={false} />
+        <StepWrap title={t.youTitle} subtitle={t.youSubtitle}>
+          <EntryFields entry={self} onChange={setSelf} showPassed={false} t={t} lang={lang ?? "en"} />
         </StepWrap>
       )}
 
       {step === 1 && (
         <StepWrap
-          title="Your partner"
-          subtitle="Husband, wife or partner. You can add a previous partner too — that helps us put children in the right place."
+          title={t.partnerTitle}
+          subtitle={t.partnerSubtitle}
         >
           <div className="space-y-6">
             {partners.map((sp, i) => (
               <div key={i} className="rounded-2xl border border-slate-200 bg-white p-4">
                 <div className="mb-3 flex items-center justify-between">
                   <h3 className="font-semibold text-slate-800">
-                    {sp.partnershipStatus === "divorced" ? "Previous partner" : "Partner"}
+                    {sp.partnershipStatus === "divorced" ? t.previousPartnerLabel : t.partnerLabel}
                   </h3>
                   <button
                     type="button"
@@ -566,18 +651,25 @@ export default function InviteWizard({ token }: { token: string }) {
                     }}
                     className="text-xs font-medium text-rose-500 hover:underline"
                   >
-                    Remove
+                    {t.remove}
                   </button>
                 </div>
                 <EntryFields
                   entry={sp}
                   onChange={(e) => setPartners((prev) => prev.map((x, j) => (j === i ? e : x)))}
                   showPassed
+                  t={t}
+                  lang={lang ?? "en"}
                 >
                   <div>
-                    <span className="text-sm font-semibold text-slate-700">Your relationship</span>
+                    <span className="text-sm font-semibold text-slate-700">{t.relationship}</span>
                     <div className="mt-1 grid grid-cols-2 gap-2">
-                      {["married", "partners", "divorced", "widowed"].map((st) => (
+                      {([
+                        ["married", t.statusMarried],
+                        ["partners", t.statusPartners],
+                        ["divorced", t.statusDivorced],
+                        ["widowed", t.statusWidowed],
+                      ] as [string, string][]).map(([st, stLabel]) => (
                         <button
                           key={st}
                           type="button"
@@ -586,13 +678,13 @@ export default function InviteWizard({ token }: { token: string }) {
                               prev.map((x, j) => (j === i ? { ...x, partnershipStatus: st } : x))
                             )
                           }
-                          className={`rounded-xl border px-3 py-2.5 text-sm font-medium capitalize ${
+                          className={`rounded-xl border px-3 py-2.5 text-sm font-medium ${
                             sp.partnershipStatus === st
                               ? "border-emerald-500 bg-emerald-50 text-emerald-800"
                               : "border-slate-200 bg-white text-slate-600"
                           }`}
                         >
-                          {st}
+                          {stLabel}
                         </button>
                       ))}
                     </div>
@@ -603,19 +695,19 @@ export default function InviteWizard({ token }: { token: string }) {
 
             {partners.length === 0 ? (
               <div className="rounded-xl border border-slate-200 bg-white p-4">
-                <p className="text-sm text-slate-600">Do you have a partner to add?</p>
+                <p className="text-sm text-slate-600">{t.partnerQuestion}</p>
                 <div className="mt-3 flex gap-2">
                   <button
                     onClick={() => setPartners([emptyEntry()])}
                     className="flex-1 rounded-full bg-emerald-600 px-4 py-3 text-base font-semibold text-white hover:bg-emerald-700"
                   >
-                    Yes
+                    {t.yes}
                   </button>
                   <button
                     onClick={() => setStep(2)}
                     className="flex-1 rounded-full border border-slate-200 px-4 py-3 text-base font-medium text-slate-600 hover:bg-slate-100"
                   >
-                    Skip this
+                    {t.skipThis}
                   </button>
                 </div>
               </div>
@@ -627,7 +719,7 @@ export default function InviteWizard({ token }: { token: string }) {
                 }
                 className="w-full rounded-xl border border-dashed border-slate-300 px-4 py-4 text-sm font-medium text-slate-500 hover:border-emerald-400 hover:text-emerald-700"
               >
-                + Add another partner (for example someone you were married to before)
+                {t.addAnotherPartner}
               </button>
             )}
           </div>
@@ -635,12 +727,12 @@ export default function InviteWizard({ token }: { token: string }) {
       )}
 
       {step === 2 && (
-        <StepWrap title="Your parents" subtitle="Add one or both — or skip if you'd rather not.">
+        <StepWrap title={t.parentsTitle} subtitle={t.parentsSubtitle}>
           <div className="space-y-6">
             {parents.map((p, i) => (
               <div key={i} className="rounded-2xl border border-slate-200 bg-white p-4">
                 <div className="mb-3 flex items-center justify-between">
-                  <h3 className="font-semibold text-slate-800">Parent {i + 1}</h3>
+                  <h3 className="font-semibold text-slate-800">{t.parentN(i + 1)}</h3>
                   {p !== null && (
                     <button
                       type="button"
@@ -649,7 +741,7 @@ export default function InviteWizard({ token }: { token: string }) {
                       }
                       className="text-xs font-medium text-rose-500 hover:underline"
                     >
-                      Remove
+                      {t.remove}
                     </button>
                   )}
                 </div>
@@ -659,10 +751,16 @@ export default function InviteWizard({ token }: { token: string }) {
                     onClick={() => setParents((prev) => prev.map((x, j) => (j === i ? emptyEntry() : x)))}
                     className="w-full rounded-xl border border-dashed border-slate-300 px-4 py-4 text-sm font-medium text-slate-500 hover:border-emerald-400 hover:text-emerald-700"
                   >
-                    + Add parent {i + 1}
+                    {t.addParentN(i + 1)}
                   </button>
                 ) : (
-                  <EntryFields entry={p} onChange={(e) => setParents((prev) => prev.map((x, j) => (j === i ? e : x)))} showPassed />
+                  <EntryFields
+                    entry={p}
+                    onChange={(e) => setParents((prev) => prev.map((x, j) => (j === i ? e : x)))}
+                    showPassed
+                    t={t}
+                    lang={lang ?? "en"}
+                  />
                 )}
               </div>
             ))}
@@ -672,14 +770,13 @@ export default function InviteWizard({ token }: { token: string }) {
 
       {step === 3 && (
         <StepWrap
-          title="Your grandparents"
-          subtitle="Your parents' parents. Even just a name and a year helps enormously."
+          title={t.grandparentsTitle}
+          subtitle={t.grandparentsSubtitle}
         >
           {parents.every((p) => p === null) ? (
             <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-center">
               <p className="text-sm text-slate-600">
-                Go back a step and add a parent first — then we can put their
-                mother and father in the right place.
+                {t.grandparentsNeedParent}
               </p>
             </div>
           ) : (
@@ -689,13 +786,13 @@ export default function InviteWizard({ token }: { token: string }) {
                   <div key={pi} className="space-y-4">
                     <h3 className="text-sm font-semibold text-slate-700">
                       {parent.draft.firstName.trim()
-                        ? `${parent.draft.firstName.trim()}'s parents`
-                        : `Parent ${pi + 1}'s parents`}
+                        ? t.parentsOfNamed(parent.draft.firstName.trim())
+                        : t.parentsOfIndex(pi + 1)}
                     </h3>
 
                     {[0, 1].map((gi) => {
                       const gp = grandparents[pi]?.[gi] ?? null;
-                      const role = gi === 0 ? "Mother" : "Father";
+                      const role = gi === 0 ? t.motherLabel : t.fatherLabel;
                       const setGp = (e: Entry | null) =>
                         setGrandparents((prev) =>
                           prev.map((row, r) =>
@@ -715,7 +812,7 @@ export default function InviteWizard({ token }: { token: string }) {
                                 onClick={() => setGp(null)}
                                 className="text-xs font-medium text-rose-500 hover:underline"
                               >
-                                Remove
+                                {t.remove}
                               </button>
                             )}
                           </div>
@@ -725,10 +822,10 @@ export default function InviteWizard({ token }: { token: string }) {
                               onClick={() => setGp(emptyEntry())}
                               className="w-full rounded-xl border border-dashed border-slate-300 px-4 py-4 text-sm font-medium text-slate-500 hover:border-emerald-400 hover:text-emerald-700"
                             >
-                              + Add {role.toLowerCase()}
+                              {gi === 0 ? t.addMother : t.addFather}
                             </button>
                           ) : (
-                            <EntryFields entry={gp} onChange={setGp} showPassed />
+                            <EntryFields entry={gp} onChange={setGp} showPassed t={t} lang={lang ?? "en"} />
                           )}
                         </div>
                       );
@@ -741,42 +838,41 @@ export default function InviteWizard({ token }: { token: string }) {
 
           <div className="mt-6 rounded-2xl border border-sky-200 bg-sky-50 p-4">
             <p className="text-sm font-medium text-sky-900">
-              Do you know your great-grandparents?
+              {t.greatGrandTitle}
             </p>
             <p className="mt-1 text-sm text-sky-800">
-              We keep this form short on purpose, so we stop at grandparents.
-              If you can go back further, reply to whoever sent you this link
-              and ask for a second link — you can fill in that older
-              generation on its own, without holding this one up.
+              {t.greatGrandBody}
             </p>
           </div>
         </StepWrap>
       )}
 
       {step === 4 && (
-        <StepWrap title="Your children" subtitle="Each child, and how they joined your family.">
+        <StepWrap title={t.childrenTitle} subtitle={t.childrenSubtitle}>
           <div className="space-y-6">
             {children.map((c, i) => (
               <div key={i} className="rounded-2xl border border-slate-200 bg-white p-4">
                 <div className="mb-3 flex items-center justify-between">
-                  <h3 className="font-semibold text-slate-800">Child {i + 1}</h3>
+                  <h3 className="font-semibold text-slate-800">{t.childN(i + 1)}</h3>
                   <button
                     type="button"
                     onClick={() => setChildren((prev) => prev.filter((_, j) => j !== i))}
                     className="text-xs font-medium text-rose-500 hover:underline"
                   >
-                    Remove
+                    {t.remove}
                   </button>
                 </div>
                 <EntryFields
                   entry={c}
                   onChange={(e) => setChildren((prev) => prev.map((x, j) => (j === i ? e : x)))}
                   showPassed={false}
+                  t={t}
+                  lang={lang ?? "en"}
                 >
                   {partners.filter((sp) => sp.draft.firstName.trim()).length > 0 && (
                     <div>
                       <span className="text-sm font-semibold text-slate-700">
-                        Who is their other parent?
+                        {t.otherParentQuestion}
                       </span>
                       <div className="mt-1 grid gap-2">
                         {partners.map((sp, pi) =>
@@ -796,7 +892,7 @@ export default function InviteWizard({ token }: { token: string }) {
                               }`}
                             >
                               {sp.draft.firstName} {sp.draft.lastName}
-                              {sp.partnershipStatus === "divorced" ? " (previous partner)" : ""}
+                              {sp.partnershipStatus === "divorced" ? t.previousPartnerSuffix : ""}
                             </button>
                           ) : null
                         )}
@@ -813,7 +909,7 @@ export default function InviteWizard({ token }: { token: string }) {
                               : "border-slate-200 bg-white text-slate-600"
                           }`}
                         >
-                          Someone else, or I&apos;d rather not say
+                          {t.someoneElse}
                         </button>
                       </div>
                     </div>
@@ -821,10 +917,10 @@ export default function InviteWizard({ token }: { token: string }) {
 
                   <div>
                     <span className="text-sm font-semibold text-slate-700">
-                      How did they join your family?
+                      {t.howJoined}
                     </span>
                     <div className="mt-1 grid grid-cols-2 gap-2">
-                      {ADOPTION_OPTIONS.map(([v, label]) => (
+                      {adoptionOptions(t).map(([v, label]) => (
                         <button
                           key={v || "bio"}
                           type="button"
@@ -848,31 +944,33 @@ export default function InviteWizard({ token }: { token: string }) {
               onClick={() => setChildren((prev) => [...prev, emptyEntry()])}
               className="w-full rounded-xl border border-dashed border-slate-300 px-4 py-4 text-sm font-medium text-slate-500 hover:border-emerald-400 hover:text-emerald-700"
             >
-              + Add a child
+              {t.addChild}
             </button>
           </div>
         </StepWrap>
       )}
 
       {step === 5 && (
-        <StepWrap title="Your siblings" subtitle="Brothers and sisters — including half- or step-siblings.">
+        <StepWrap title={t.siblingsTitle} subtitle={t.siblingsSubtitle}>
           <div className="space-y-6">
             {siblings.map((s, i) => (
               <div key={i} className="rounded-2xl border border-slate-200 bg-white p-4">
                 <div className="mb-3 flex items-center justify-between">
-                  <h3 className="font-semibold text-slate-800">Sibling {i + 1}</h3>
+                  <h3 className="font-semibold text-slate-800">{t.siblingN(i + 1)}</h3>
                   <button
                     type="button"
                     onClick={() => setSiblings((prev) => prev.filter((_, j) => j !== i))}
                     className="text-xs font-medium text-rose-500 hover:underline"
                   >
-                    Remove
+                    {t.remove}
                   </button>
                 </div>
                 <EntryFields
                   entry={s}
                   onChange={(e) => setSiblings((prev) => prev.map((x, j) => (j === i ? e : x)))}
                   showPassed
+                  t={t}
+                  lang={lang ?? "en"}
                 />
               </div>
             ))}
@@ -881,35 +979,36 @@ export default function InviteWizard({ token }: { token: string }) {
               onClick={() => setSiblings((prev) => [...prev, emptyEntry()])}
               className="w-full rounded-xl border border-dashed border-slate-300 px-4 py-4 text-sm font-medium text-slate-500 hover:border-emerald-400 hover:text-emerald-700"
             >
-              + Add a sibling
+              {t.addSibling}
             </button>
           </div>
         </StepWrap>
       )}
 
       {step === 6 && (
-        <StepWrap title="Ready to send" subtitle="Here's everything you've told us. Tap a section to go back and change it.">
+        <StepWrap title={t.reviewTitle} subtitle={t.reviewSubtitle}>
           <ReviewList
             entries={[
-              { label: "You", entry: self },
+              { label: t.reviewYou, entry: self },
               ...partners
                 .filter((sp) => sp.draft.firstName)
                 .map((sp) => ({
-                  label: sp.partnershipStatus === "divorced" ? "Previous partner" : "Partner",
+                  label: sp.partnershipStatus === "divorced" ? t.previousPartnerLabel : t.partnerLabel,
                   entry: sp,
                 })),
-              ...parents.filter((p) => p?.draft.firstName).map((p, i) => ({ label: `Parent ${i + 1}`, entry: p! })),
-              ...children.filter((c) => c.draft.firstName).map((c, i) => ({ label: `Child ${i + 1}`, entry: c })),
-              ...siblings.filter((s) => s.draft.firstName).map((s, i) => ({ label: `Sibling ${i + 1}`, entry: s })),
+              ...parents.filter((p) => p?.draft.firstName).map((p, i) => ({ label: t.parentN(i + 1), entry: p! })),
+              ...children.filter((c) => c.draft.firstName).map((c, i) => ({ label: t.childN(i + 1), entry: c })),
+              ...siblings.filter((s) => s.draft.firstName).map((s, i) => ({ label: t.siblingN(i + 1), entry: s })),
             ]}
             onJump={setStep}
+            t={t}
           />
           <button
             onClick={() => void submit()}
             disabled={submitting}
             className="mt-6 w-full rounded-full bg-emerald-600 px-6 py-4 text-lg font-bold text-white shadow-md hover:bg-emerald-700 disabled:opacity-50"
           >
-            {submitting ? "Sending…" : "Send my info 🌳"}
+            {submitting ? t.sending : t.send}
           </button>
         </StepWrap>
       )}
@@ -923,14 +1022,14 @@ export default function InviteWizard({ token }: { token: string }) {
           disabled={step === 0}
           className="rounded-full border border-slate-200 px-6 py-3 text-base font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-40"
         >
-          ← Back
+          {t.back}
         </button>
-        {step < 5 && (
+        {step < STEP_COUNT - 1 && (
           <button
             onClick={next}
             className="flex-1 rounded-full bg-slate-900 px-6 py-3 text-base font-semibold text-white hover:bg-slate-700"
           >
-            Continue →
+            {t.continue}
           </button>
         )}
       </div>
@@ -938,12 +1037,12 @@ export default function InviteWizard({ token }: { token: string }) {
   );
 }
 
-function Shell({ children }: { children: React.ReactNode }) {
+function Shell({ children, t }: { children: React.ReactNode; t: Strings }) {
   return (
     <div className="mx-auto w-full max-w-lg px-4 pb-16 pt-6">
       <div className="mb-6 text-center">
         <span className="text-2xl">🌳</span>
-        <p className="text-xs font-medium uppercase tracking-widest text-slate-400">Family tree</p>
+        <p className="text-xs font-medium uppercase tracking-widest text-slate-400">{t.brand}</p>
       </div>
       {children}
     </div>
@@ -963,18 +1062,21 @@ function StepWrap({ title, subtitle, children }: { title: string; subtitle: stri
 function ReviewList({
   entries,
   onJump,
+  t,
 }: {
   entries: { label: string; entry: Entry }[];
   onJump: (step: number) => void;
+  t: Strings;
 }) {
   const jumpMap: Record<string, number> = {
-    You: 0,
-    Partner: 1,
+    [t.reviewYou]: 0,
+    [t.partnerLabel]: 1,
+    [t.previousPartnerLabel]: 1,
   };
   if (entries.every((e) => !e.entry.draft.firstName)) {
     return (
       <p className="rounded-xl bg-slate-100 p-4 text-sm text-slate-500">
-        Nothing added yet — go back and add at least your own details.
+        {t.reviewEmpty}
       </p>
     );
   }
@@ -991,19 +1093,28 @@ function ReviewList({
               </p>
               <p className="text-xs text-slate-500">
                 {entry.linkedTo
-                  ? `Will be linked to ${entry.linkedName} (already in tree)`
+                  ? t.willLinkTo(entry.linkedName ?? "")
                   : entry.draft.birthDate
-                    ? `Born ${formatDate(entry.draft.birthDate)}`
-                    : "New to the tree"}
+                    ? t.bornOn(formatDate(entry.draft.birthDate))
+                    : t.newToTree}
                 {entry.adoption ? ` · ${entry.adoption}` : ""}
               </p>
             </div>
             <button
               type="button"
-              onClick={() => onJump(jumpMap[label] ?? (label.startsWith("Parent") ? 2 : label.startsWith("Child") ? 3 : 4))}
+              onClick={() =>
+                onJump(
+                  jumpMap[label] ??
+                    (label.startsWith(t.parentN(1).split(" ")[0])
+                      ? 2
+                      : label.startsWith(t.childN(1).split(" ")[0])
+                        ? 4
+                        : 5)
+                )
+              }
               className="shrink-0 text-sm font-medium text-emerald-700 underline"
             >
-              Change
+              {t.change}
             </button>
           </div>
         ))}
