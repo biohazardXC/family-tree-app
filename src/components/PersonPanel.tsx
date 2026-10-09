@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import type { PersonDTO, RelationType } from "@/lib/types";
 import { fullName, initials, lifespan } from "@/lib/person-utils";
+import { formatDate } from "@/lib/dates";
+import DateField from "./DateField";
 import type { PersonRelations } from "@/lib/relations";
 
 interface Props {
@@ -163,15 +165,13 @@ export default function PersonPanel({ person, relations, onClose, onAddRelative,
                 <option value="other">Other</option>
               </select>
             </label>
-            <label className="block text-xs font-medium text-slate-500">
-              Birth date
-              <input
-                className={`mt-1 ${inputClass}`}
-                placeholder="e.g. 1945 or March 1948"
+            <div className="col-span-2">
+              <DateField
+                label="Date of birth"
                 value={form.birthDate}
-                onChange={set("birthDate")}
+                onChange={(v) => setForm((f) => ({ ...f, birthDate: v }))}
               />
-            </label>
+            </div>
             <label className="col-span-2 block text-xs font-medium text-slate-500">
               Birth place
               <input
@@ -181,10 +181,13 @@ export default function PersonPanel({ person, relations, onClose, onAddRelative,
                 onChange={set("birthPlace")}
               />
             </label>
-            <label className="block text-xs font-medium text-slate-500">
-              Death date
-              <input className={`mt-1 ${inputClass}`} value={form.deathDate} onChange={set("deathDate")} />
-            </label>
+            <div className="col-span-2">
+              <DateField
+                label="Date of death"
+                value={form.deathDate}
+                onChange={(v) => setForm((f) => ({ ...f, deathDate: v }))}
+              />
+            </div>
             <label className="block text-xs font-medium text-slate-500">
               Death place
               <input className={`mt-1 ${inputClass}`} value={form.deathPlace} onChange={set("deathPlace")} />
@@ -225,8 +228,8 @@ export default function PersonPanel({ person, relations, onClose, onAddRelative,
       ) : (
         <div className="flex-1 overflow-y-auto p-5">
           <dl className="space-y-3">
-            <Row label="Born" value={[person.birthDate, person.birthPlace].filter(Boolean).join(" · ")} />
-            <Row label="Died" value={[person.deathDate, person.deathPlace].filter(Boolean).join(" · ")} />
+            <Row label="Born" value={[formatDate(person.birthDate), person.birthPlace].filter(Boolean).join(" · ")} />
+            <Row label="Died" value={[formatDate(person.deathDate), person.deathPlace].filter(Boolean).join(" · ")} />
             <Row
               label="Gender"
               value={

@@ -61,7 +61,13 @@ export interface InviteDTO {
   submittedAt: string | null;
 }
 
-export type SubmissionRole = "self" | "spouse" | "parent" | "child" | "sibling";
+export type SubmissionRole =
+  | "self"
+  | "spouse"
+  | "parent"
+  | "child"
+  | "sibling"
+  | "grandparent";
 export type SubmissionStatus = "submitted" | "approved" | "rejected";
 
 export interface PersonDraft {
@@ -91,6 +97,8 @@ export interface SubmissionItem {
    * for children from an earlier relationship.
    */
   otherParentKey?: string | null;
+  /** For grandparents: the key of the "parent" item they are a parent of. */
+  ofParentKey?: string | null;
 }
 
 export interface SubmissionDTO {

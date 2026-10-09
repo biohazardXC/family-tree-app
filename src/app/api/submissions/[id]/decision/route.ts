@@ -168,13 +168,30 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     let addedParent = false;
     for (const item of byRole("parent")) {
       const pid = await resolve(item);
-      if (pid && pid !== selfId && !(await parentEdgeExists(pid, selfId))) {
+      if (!pid) continue;
+      resolved.set(item.key, pid);
+      if (pid !== selfId && !(await parentEdgeExists(pid, selfId))) {
         await db.insert(parentEdges).values({ parentId: pid, childId: selfId });
         addedParent = true;
       }
     }
     // Those parents belong to self's existing sibling group too.
     if (addedParent) await syncGroupParents(selfId);
+
+    // 3b. Grandparents — parents of the parent the invitee named. We only
+    // attach one when we know which parent they belong to, so a grandparent
+    // can never land on the wrong side of the family.
+    for (const item of byRole("grandparent")) {
+      const parentId = item.ofParentKey ? resolved.get(item.ofParentKey) : null;
+      if (!parentId) continue;
+      const gid = await resolve(item);
+      if (!gid || gid === parentId) continue;
+      resolved.set(item.key, gid);
+      if (!(await parentEdgeExists(gid, parentId))) {
+        await db.insert(parentEdges).values({ parentId: gid, childId: parentId });
+        await syncGroupParents(parentId);
+      }
+    }
 
     // 4. Children — of self, plus whichever partner the invitee named.
     for (const item of byRole("child")) {

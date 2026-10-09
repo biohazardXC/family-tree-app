@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import type { InviteDTO, MatchResult, PersonGaps, SubmissionItem } from "@/lib/types";
 import { fullName, lifespan } from "@/lib/person-utils";
+import { formatDate } from "@/lib/dates";
 
 /**
  * The admin's command centre: invites, incoming submissions, and
@@ -39,6 +40,7 @@ const ROLE_LABEL: Record<string, string> = {
   parent: "Parent",
   child: "Child",
   sibling: "Sibling",
+  grandparent: "Grandparent",
 };
 
 const CONFLICT_FIELDS: { key: keyof SubmissionItem["person"]; label: string }[] = [
@@ -321,7 +323,7 @@ function ItemCard({
             {p.firstName} {p.lastName ?? ""}
           </p>
           <p className="text-xs text-slate-500">
-            {[p.birthDate, p.birthPlace].filter(Boolean).join(" · ") || "no dates given"}
+            {[formatDate(p.birthDate), p.birthPlace].filter(Boolean).join(" · ") || "no dates given"}
             {p.maidenName ? ` · née ${p.maidenName}` : ""}
           </p>
           {p.notes && <p className="mt-1 text-xs italic text-slate-500">“{p.notes}”</p>}

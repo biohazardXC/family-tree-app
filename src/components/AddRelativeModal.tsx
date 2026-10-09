@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { MatchResult, PersonDTO, RelationType } from "@/lib/types";
 import { fullName } from "@/lib/person-utils";
+import { formatDate } from "@/lib/dates";
+import DateField from "./DateField";
 
 export type ModalKind = RelationType | "root";
 
@@ -185,7 +187,7 @@ export default function AddRelativeModal({ kind, anchor, onClose, onCreated }: P
                   <span className="text-sm text-slate-700">
                     {fullName(m.person)}
                     {m.person.birthDate ? (
-                      <span className="text-slate-400"> · b. {m.person.birthDate}</span>
+                      <span className="text-slate-400"> · b. {formatDate(m.person.birthDate)}</span>
                     ) : null}
                     {m.confidence === "likely" ? (
                       <span className="ml-1 text-xs text-amber-700">likely match</span>
@@ -236,15 +238,13 @@ export default function AddRelativeModal({ kind, anchor, onClose, onCreated }: P
               <option value="other">Other</option>
             </select>
           </label>
-          <label className="block text-xs font-medium text-slate-500">
-            Birth date
-            <input
-              className={`mt-1 ${inputClass}`}
-              placeholder="e.g. 1945 or March 1948"
+          <div className="col-span-2">
+            <DateField
+              label="Date of birth"
               value={form.birthDate}
-              onChange={set("birthDate")}
+              onChange={(v) => setForm((f) => ({ ...f, birthDate: v }))}
             />
-          </label>
+          </div>
           <label className="col-span-2 block text-xs font-medium text-slate-500">
             Birth place
             <input
@@ -254,10 +254,13 @@ export default function AddRelativeModal({ kind, anchor, onClose, onCreated }: P
               onChange={set("birthPlace")}
             />
           </label>
-          <label className="block text-xs font-medium text-slate-500">
-            Death date
-            <input className={`mt-1 ${inputClass}`} value={form.deathDate} onChange={set("deathDate")} />
-          </label>
+          <div className="col-span-2">
+            <DateField
+              label="Date of death"
+              value={form.deathDate}
+              onChange={(v) => setForm((f) => ({ ...f, deathDate: v }))}
+            />
+          </div>
           <label className="block text-xs font-medium text-slate-500">
             Death place
             <input className={`mt-1 ${inputClass}`} value={form.deathPlace} onChange={set("deathPlace")} />
