@@ -124,10 +124,20 @@ function TreeCanvas() {
     await fetchTree();
   }, [fetchTree]);
 
-  const demoAction = async (action: "clear" | "reseed") => {
+  const demoAction = async (action: "clear" | "reseed" | "wipe") => {
     if (action === "reseed") {
       const ok = window.confirm("This removes everyone (including your own additions) and restores the demo family. Continue?");
       if (!ok) return;
+    }
+    if (action === "wipe") {
+      const count = data?.people.length ?? 0;
+      const ok = window.confirm(
+        `This permanently deletes all ${count} people and every link between them, ` +
+          "leaving a completely empty tree. Photos and invite links are kept. " +
+          "This cannot be undone. Continue?"
+      );
+      if (!ok) return;
+      if (!window.confirm("Really delete everyone? There is no undo.")) return;
     }
     setBusyDemo(true);
     try {
@@ -242,7 +252,7 @@ function TreeCanvas() {
       </div>
 
       {/* Demo banner */}
-      {hasDemoPeople && (
+      {hasDemoPeople ? (
         <div className="absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 flex-wrap items-center justify-center gap-2 rounded-full border border-amber-200 bg-amber-50/95 px-4 py-2 text-xs shadow-md">
           <span className="font-medium text-amber-800">
             Demo family — try everything out, then start fresh
@@ -262,6 +272,23 @@ function TreeCanvas() {
             Reset demo
           </button>
         </div>
+      ) : (
+        !isEmpty && (
+          /* Clearing the tree used to be possible only while demo people
+             existed — that is, only when it wasn't needed. This is reachable
+             whenever there is something to clear, and it is behind the admin
+             password and two confirmations. */
+          <div className="absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full border border-slate-200 bg-white/95 px-4 py-2 text-xs shadow-md">
+            <span className="text-slate-400">{data?.people.length} people in your tree</span>
+            <button
+              onClick={() => void demoAction("wipe")}
+              disabled={busyDemo}
+              className="rounded-full border border-rose-200 px-3 py-1 font-medium text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+            >
+              {busyDemo ? "Working…" : "Delete everyone"}
+            </button>
+          </div>
+        )
       )}
 
       {/* Empty state */}
