@@ -97,6 +97,7 @@ export default function ReviewHome() {
 function SubmissionsTab() {
   const [list, setList] = useState<SubmissionSummary[] | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
 
   const load = useCallback(() => {
     fetch("/api/submissions", { cache: "no-store" })
@@ -106,6 +107,27 @@ function SubmissionsTab() {
   }, []);
 
   useEffect(load, [load]);
+
+  const remove = async (s: SubmissionSummary) => {
+    const note =
+      s.status === "approved"
+        ? "\n\nThe people it added stay in your tree — only the record of what was sent is removed."
+        : "";
+    if (!window.confirm(`Remove ${s.inviteName}'s submission from this list?${note}`)) return;
+
+    setRemoving(s.id);
+    try {
+      const res = await fetch(`/api/submissions/${s.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        window.alert(j.error ?? "Could not remove the submission.");
+        return;
+      }
+      load();
+    } finally {
+      setRemoving(null);
+    }
+  };
 
   if (openId) {
     return <SubmissionDetail id={openId} onBack={() => { setOpenId(null); load(); }} />;
@@ -135,23 +157,38 @@ function SubmissionsTab() {
   return (
     <div className="space-y-3">
       {list.map((s) => (
-        <button
+        /* A row, not a button: the remove control can't be nested inside one. */
+        <div
           key={s.id}
-          onClick={() => setOpenId(s.id)}
-          className="flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm hover:border-emerald-300"
+          className="flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:border-emerald-300"
         >
-          <div className="min-w-0">
-            <p className="font-semibold text-slate-800">{s.inviteName}</p>
-            <p className="text-xs text-slate-500">
-              {s.itemCount} {s.itemCount === 1 ? "person" : "people"} ·{" "}
-              {new Date(s.createdAt).toLocaleDateString()}{" "}
-              {new Date(s.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-            </p>
-          </div>
-          <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold capitalize ${statusChip(s.status)}`}>
-            {s.status}
-          </span>
-        </button>
+          <button
+            onClick={() => setOpenId(s.id)}
+            className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
+          >
+            <div className="min-w-0">
+              <p className="font-semibold text-slate-800">{s.inviteName}</p>
+              <p className="text-xs text-slate-500">
+                {s.itemCount} {s.itemCount === 1 ? "person" : "people"} ·{" "}
+                {new Date(s.createdAt).toLocaleDateString()}{" "}
+                {new Date(s.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              </p>
+            </div>
+            <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold capitalize ${statusChip(s.status)}`}>
+              {s.status}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            title="Remove this submission from the list"
+            disabled={removing === s.id}
+            onClick={() => void remove(s)}
+            className="shrink-0 rounded-full border border-slate-200 px-2.5 py-1 text-xs text-slate-400 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
+          >
+            {removing === s.id ? "…" : "✕"}
+          </button>
+        </div>
       ))}
     </div>
   );
