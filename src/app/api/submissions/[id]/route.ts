@@ -35,3 +35,25 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     items: itemsWithMatches,
   });
 }
+
+/**
+ * Removes a submission from the review list.
+ *
+ * This deletes the record of what someone sent, not the people it created:
+ * anyone already approved into the tree stays there, and is removed from the
+ * tree itself if that's what's wanted. Rejected, duplicate and test
+ * submissions otherwise pile up forever.
+ */
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  try {
+    const [gone] = await db.delete(submissions).where(eq(submissions.id, id)).returning();
+    if (!gone) {
+      return NextResponse.json({ error: "Submission not found" }, { status: 404 });
+    }
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error(`DELETE /api/submissions/${id} failed:`, err);
+    return NextResponse.json({ error: "Could not remove the submission" }, { status: 500 });
+  }
+}
