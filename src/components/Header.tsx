@@ -9,17 +9,33 @@ const LINKS = [
   { href: "/review", label: "Review" },
 ];
 
+/**
+ * Pages a relative or a casual visitor can be on. The admin links are hidden
+ * there — not as security (the middleware does that), but because an invitee
+ * seeing a "Review" tab and being bounced to a password box is confusing.
+ */
+const PUBLIC_PATHS = [/^\/share$/, /^\/login$/, /^\/invite\//];
+
 export default function Header() {
   const pathname = usePathname();
+  const isPublic = PUBLIC_PATHS.some((r) => r.test(pathname));
+
+  const signOut = async () => {
+    await fetch("/api/login", { method: "DELETE" });
+    window.location.href = "/share";
+  };
 
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-7xl items-center gap-6 px-4">
-        <Link href="/" className="flex items-center gap-2 text-base font-semibold text-slate-900">
+        <Link
+          href={isPublic ? "/share" : "/"}
+          className="flex items-center gap-2 text-base font-semibold text-slate-900"
+        >
           <span aria-hidden>🌳</span> Rooted
         </Link>
         <nav className="flex gap-1 text-sm">
-          {LINKS.map((l) => (
+          {(isPublic ? [] : LINKS).map((l) => (
             <Link
               key={l.href}
               href={l.href}
@@ -33,9 +49,19 @@ export default function Header() {
             </Link>
           ))}
         </nav>
-        <span className="ml-auto hidden text-xs text-slate-400 sm:block">
-          v0.1 — early days 🌱
-        </span>
+        {isPublic ? (
+          <span className="ml-auto hidden text-xs text-slate-400 sm:block">
+            v0.1 — early days 🌱
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={signOut}
+            className="ml-auto rounded-md px-3 py-1.5 text-xs text-slate-500 hover:bg-slate-100"
+          >
+            Sign out
+          </button>
+        )}
       </div>
     </header>
   );
