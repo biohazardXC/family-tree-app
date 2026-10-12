@@ -86,16 +86,87 @@ export function layoutTree(data: TreeData): {
     data.parentEdges.filter((e) => e.adoption).map((e) => e.childId)
   );
 
-  // Siblings linked without known parents: pull them onto the same row.
   const siblingLinks = data.siblingEdges ?? [];
+
+  // ------------------------------------------------------------------
+  // Generations: one rule, applied to everybody.
+  //
+  // dagre ranks people using parent->child links alone. Partners and siblings
+  // don't influence it, so they used to be nudged into place afterwards by a
+  // single pass that copied a sibling's row from their brother. One pass
+  // can't settle a chain: link Julian to Paul, Merissa to Merisca, then give
+  // only Merissa a parent, and whoever is adjusted last wins. The result
+  // drifted every time sibling links outnumbered parent links.
+  //
+  // So generations are worked out here instead, from all three kinds of link:
+  //   - partners and siblings are the SAME generation (an equality)
+  //   - a child is exactly one generation below each parent
+  //
+  // Equalities are merged first, so each cluster of partners and siblings
+  // becomes a single unit. Then each unit is pushed below its parent units,
+  // repeatedly, until nothing moves. Everyone in a unit shares a row by
+  // construction, so no later patching is needed.
+  // ------------------------------------------------------------------
+  const genRoot = new Map<string, string>();
+
+  const genFind = (id: string): string => {
+    const r = genRoot.get(id);
+    if (r === undefined || r === id) return id;
+    const top = genFind(r);
+    genRoot.set(id, top);
+    return top;
+  };
+
+  const genUnion = (a: string, b: string) => {
+    if (!peopleIds.has(a) || !peopleIds.has(b)) return;
+    const ra = genFind(a);
+    const rb = genFind(b);
+    if (ra !== rb) genRoot.set(ra, rb);
+  };
+
+  for (const p of data.people) genRoot.set(p.id, p.id);
+  for (const s of data.partnerships) genUnion(s.aId, s.bId);
+  for (const link of siblingLinks) genUnion(link.aId, link.bId);
+
+  // Parent -> child, collapsed to the units above.
+  const unitChildren = new Map<string, Set<string>>();
+  for (const e of data.parentEdges) {
+    if (!peopleIds.has(e.parentId) || !peopleIds.has(e.childId)) continue;
+    const from = genFind(e.parentId);
+    const to = genFind(e.childId);
+    // A person who is somehow both parent and sibling of the same person
+    // would land in one unit; ignore that link rather than loop forever.
+    if (from === to) continue;
+    if (!unitChildren.has(from)) unitChildren.set(from, new Set());
+    unitChildren.get(from)!.add(to);
+  }
+
+  const generation = new Map<string, number>();
+  for (const p of data.people) generation.set(genFind(p.id), 0);
+
+  // Relax until stable. Bounded by the number of units, so a cycle in bad
+  // data stops the loop instead of hanging the page.
+  const unitCount = new Set([...data.people.map((p) => genFind(p.id))]).size;
+  for (let pass = 0; pass < unitCount + 1; pass++) {
+    let moved = false;
+    for (const [from, children] of unitChildren) {
+      const next = (generation.get(from) ?? 0) + 1;
+      for (const to of children) {
+        if ((generation.get(to) ?? 0) < next) {
+          generation.set(to, next);
+          moved = true;
+        }
+      }
+    }
+    if (!moved) break;
+  }
+
+  // Row spacing matches what dagre produced before, so the tree looks the
+  // same: one node tall plus a gap above and below the invisible family point.
+  const ROW_STEP = NODE_H + 2 * 54;
   const rowOverride = new Map<string, number>();
-  for (const link of siblingLinks) {
-    const a = g.node(link.aId) as { y: number } | undefined;
-    const b = g.node(link.bId) as { y: number } | undefined;
-    if (!a || !b) continue;
-    const y = Math.max(rowOverride.get(link.aId) ?? a.y, rowOverride.get(link.bId) ?? b.y);
-    rowOverride.set(link.aId, y);
-    rowOverride.set(link.bId, y);
+  for (const p of data.people) {
+    rowOverride.set(p.id, 40 + (generation.get(genFind(p.id)) ?? 0) * ROW_STEP);
   }
 
   // ------------------------------------------------------------------
