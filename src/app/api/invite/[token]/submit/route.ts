@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { invites, submissions } from "@/db/schema";
 import type { SubmissionItem } from "@/lib/types";
+import { normalizePartnershipStatus } from "@/lib/partnership-status";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
       if (!item.person.firstName?.trim()) {
         return NextResponse.json(
           { error: "Every person needs at least a first name." },
+          { status: 400 }
+        );
+      }
+      // A partner must carry a chosen status; the form no longer makes one up.
+      if (item.role === "spouse" && !normalizePartnershipStatus(item.partnershipStatus)) {
+        return NextResponse.json(
+          { error: "Please choose a relationship status for each partner." },
           { status: 400 }
         );
       }

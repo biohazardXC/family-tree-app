@@ -112,6 +112,7 @@ export interface Strings {
   relationship: string;
   statusMarried: string;
   statusPartners: string;
+  statusEngaged: string;
   statusDivorced: string;
   statusWidowed: string;
   partnerQuestion: string;
@@ -165,6 +166,7 @@ export interface Strings {
   errNeedFirstName: string;
   errNeedNameFor: (label: string) => string;
   errNeedChildName: string;
+  errNeedPartnerStatus: string;
   errNeedSiblingName: string;
   errSendFailed: string;
   labelPartnerN: (i: number) => string;
@@ -266,6 +268,7 @@ const en: Strings = {
   relationship: "Your relationship",
   statusMarried: "Married",
   statusPartners: "Partners",
+  statusEngaged: "Engaged",
   statusDivorced: "Divorced",
   statusWidowed: "Widowed",
   partnerQuestion: "Do you have a partner to add?",
@@ -321,6 +324,7 @@ const en: Strings = {
   errNeedFirstName: "Please add your first name.",
   errNeedNameFor: (label) => `Please add a first name for the ${label}, or clear the other boxes.`,
   errNeedChildName: "Please add a first name for each child, or remove them.",
+  errNeedPartnerStatus: "Please choose your relationship status before continuing.",
   errNeedSiblingName: "Please add a first name for each sibling, or remove them.",
   errSendFailed: "Could not send — please try again.",
   labelPartnerN: (i) => `partner ${i}`,
@@ -424,6 +428,7 @@ const af: Strings = {
   relationship: "Julle verhouding",
   statusMarried: "Getroud",
   statusPartners: "Saamlewend",
+  statusEngaged: "Verloof",
   statusDivorced: "Geskei",
   statusWidowed: "Wewenaar / weduwee",
   partnerQuestion: "Het jy 'n maat om by te voeg?",
@@ -479,6 +484,7 @@ const af: Strings = {
   errNeedFirstName: "Vul asseblief jou naam in.",
   errNeedNameFor: (label) => `Vul asseblief 'n naam in vir die ${label}, of maak die ander blokkies leeg.`,
   errNeedChildName: "Vul asseblief 'n naam vir elke kind in, of verwyder hulle.",
+  errNeedPartnerStatus: "Kies asseblief julle verhoudingstatus voordat jy aangaan.",
   errNeedSiblingName: "Vul asseblief 'n naam vir elke broer of suster in, of verwyder hulle.",
   errSendFailed: "Kon nie stuur nie — probeer asseblief weer.",
   labelPartnerN: (i) => `maat ${i}`,

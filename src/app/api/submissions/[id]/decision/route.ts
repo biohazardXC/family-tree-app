@@ -3,6 +3,7 @@ import { and, eq, or } from "drizzle-orm";
 import { db } from "@/db";
 import { parentEdges, partnerships, people, submissions } from "@/db/schema";
 import { linkSiblings, syncGroupParents } from "@/db/sibling-links";
+import { normalizePartnershipStatus } from "@/lib/partnership-status";
 import type { AdoptionType, PersonDraft, SubmissionItem } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -159,7 +160,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           await db.insert(partnerships).values({
             aId: selfId,
             bId: pid,
-            status: clean(item.partnershipStatus),
+            status: normalizePartnershipStatus(item.partnershipStatus),
           });
         }
       }

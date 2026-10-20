@@ -6,6 +6,11 @@ import { fullName } from "@/lib/person-utils";
 import { formatDate } from "@/lib/dates";
 import DateField from "./DateField";
 import PhotoField from "./PhotoField";
+import {
+  PARTNERSHIP_STATUS_OPTIONS,
+  PARTNERSHIP_STRINGS,
+} from "@/lib/partnership-status";
+import { LanguageToggle, useRootedLang } from "@/lib/use-rooted-lang";
 
 export type ModalKind = RelationType | "root";
 
@@ -40,7 +45,11 @@ export default function AddRelativeModal({ kind, anchor, onClose, onCreated }: P
     notes: "",
     photoUrl: "",
   });
-  const [partnershipStatus, setPartnershipStatus] = useState("married");
+  // Empty until chosen on purpose. It used to start at "married", which is
+  // how a relationship could be saved as a marriage nobody had confirmed.
+  const [partnershipStatus, setPartnershipStatus] = useState("");
+  const [lang, chooseLang] = useRootedLang();
+  const partnershipText = PARTNERSHIP_STRINGS[lang];
   const [adoption, setAdoption] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -84,6 +93,10 @@ export default function AddRelativeModal({ kind, anchor, onClose, onCreated }: P
   /** Connect an existing person instead of creating a duplicate. */
   const linkExisting = async (person: PersonDTO) => {
     if (!anchor || kind === "root") return;
+    if (kind === "partner" && !partnershipStatus) {
+      setError(partnershipText.chooseError);
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -130,6 +143,10 @@ export default function AddRelativeModal({ kind, anchor, onClose, onCreated }: P
     e.preventDefault();
     if (!form.firstName.trim()) {
       setError("Please give a first name.");
+      return;
+    }
+    if (kind === "partner" && !partnershipStatus) {
+      setError(partnershipText.chooseError);
       return;
     }
     setSaving(true);
@@ -221,7 +238,13 @@ export default function AddRelativeModal({ kind, anchor, onClose, onCreated }: P
         <div className="mt-4 grid grid-cols-2 gap-3">
           <label className="col-span-2 block text-xs font-medium text-slate-500">
             First name *
-            <input className={`mt-1 ${inputClass}`} value={form.firstName} onChange={set("firstName")} autoFocus />
+            <input
+              className={`mt-1 ${inputClass}`}
+              value={form.firstName}
+              onChange={set("firstName")}
+              data-testid="person-first-name"
+              autoFocus
+            />
           </label>
           <label className="block text-xs font-medium text-slate-500">
             Last name
@@ -280,20 +303,34 @@ export default function AddRelativeModal({ kind, anchor, onClose, onCreated }: P
           </label>
 
           {kind === "partner" && (
-            <label className="col-span-2 block text-xs font-medium text-slate-500">
-              Relationship
+            <div className="col-span-2 block">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-medium text-slate-500">
+                  {partnershipText.statusTitle} *
+                </span>
+                <LanguageToggle lang={lang} onChange={chooseLang} />
+              </div>
               <select
                 className={`mt-1 ${inputClass}`}
                 value={partnershipStatus}
-                onChange={(e) => setPartnershipStatus(e.target.value)}
+                onChange={(e) => {
+                  setPartnershipStatus(e.target.value);
+                  setError(null);
+                }}
+                aria-label={partnershipText.statusTitle}
+                data-testid="new-partnership-status"
               >
-                <option value="married">Married</option>
-                <option value="partners">Partners</option>
-                <option value="engaged">Engaged</option>
-                <option value="divorced">Divorced</option>
-                <option value="widowed">Widowed</option>
+                <option value="" disabled>
+                  {partnershipText.choose}
+                </option>
+                {PARTNERSHIP_STATUS_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.symbol} {option[lang]}
+                  </option>
+                ))}
               </select>
-            </label>
+              <p className="mt-1 text-[11px] text-slate-400">{partnershipText.statusHint}</p>
+            </div>
           )}
 
           {kind === "child" && (

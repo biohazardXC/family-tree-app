@@ -1,24 +1,12 @@
 import dagre from "@dagrejs/dagre";
 import type { Edge, Node } from "@xyflow/react";
 import type { PersonDTO, TreeData } from "./types";
+import { partnershipSymbol } from "./partnership-status";
 
 export const NODE_W = 216;
 export const NODE_H = 96;
 
 export type PersonNodeData = { person: PersonDTO; adopted?: boolean };
-
-/**
- * Standard genealogical symbols, shown in the middle of a partner line.
- * ⚭ joined rings = married, ⚮ broken rings = divorced, ⚯ open rings =
- * together but not married.
- */
-const PARTNER_SYMBOL: Record<string, string> = {
-  married: "⚭",
-  engaged: "⚯",
-  partners: "⚯",
-  divorced: "⚮",
-  widowed: "⚰",
-};
 
 /**
  * Lays out the whole family tree.
@@ -735,15 +723,24 @@ export function layoutTree(data: TreeData): {
       targetHandle: "t-left",
       type: "straight",
       // The traditional genealogy symbols, sitting on the middle of the line:
-      // rings joined for a marriage, broken for a divorce.
-      label: PARTNER_SYMBOL[s.status ?? "married"] ?? PARTNER_SYMBOL.married,
+      // rings joined for a marriage, broken for a divorce. An old row with no
+      // status shows a question mark rather than quietly claiming a marriage.
+      label: partnershipSymbol(s.status),
+      // The editor adds a tappable symbol on top of this line (see
+      // PartnershipEdge); the read-only /share tree keeps this plain label.
+      data: {
+        partnershipId: s.id,
+        status: s.status,
+        aId: s.aId,
+        bId: s.bId,
+      },
       labelStyle: {
-        fill: s.status === "divorced" ? "#9f1239" : "#be123c",
+        fill: !s.status ? "#475569" : s.status === "divorced" ? "#9f1239" : "#be123c",
         fontSize: 16,
         fontWeight: 600,
       },
       labelShowBg: true,
-      labelBgStyle: { fill: "#ffffff", stroke: "#fecdd3" },
+      labelBgStyle: { fill: "#ffffff", stroke: s.status ? "#fecdd3" : "#cbd5e1" },
       labelBgPadding: [6, 3] as [number, number],
       labelBgBorderRadius: 10,
       style: {
