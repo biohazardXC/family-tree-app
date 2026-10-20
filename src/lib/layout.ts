@@ -2,6 +2,7 @@ import dagre from "@dagrejs/dagre";
 import type { Edge, Node } from "@xyflow/react";
 import type { PersonDTO, TreeData } from "./types";
 import { partnershipSymbol } from "./partnership-status";
+import { yearFromString } from "./person-utils";
 
 export const NODE_W = 216;
 export const NODE_H = 96;
@@ -183,6 +184,7 @@ export function layoutTree(data: TreeData): {
   // overlaps.
   // ------------------------------------------------------------------
   const H_GAP = 42;
+  const personById = new Map(data.people.map((p) => [p.id, p]));
   const place = new Map<string, { x: number; y: number }>();
   // Dagre's x is only the starting guess: every row is re-placed below. Rows
   // are settled more than once (see the sweeps), so the starting guess has to
@@ -263,6 +265,11 @@ export function layoutTree(data: TreeData): {
     if (!childrenOf.has(e.parentId)) childrenOf.set(e.parentId, []);
     childrenOf.get(e.parentId)!.push(e.childId);
   }
+
+  // A row's finished order, and the ability to pin one while the birth-order
+  // polish below tries a swap out. Both are keyed by the row's y position.
+  const rowOrders = new Map<number, string[]>();
+  const rowOverrides = new Map<number, string[]>();
 
   const layoutRow = (y: number) => {
     const ids = [...place.keys()].filter((id) => place.get(id)!.y === y);
@@ -446,7 +453,10 @@ export function layoutTree(data: TreeData): {
         groupRank(a[0][0]) - groupRank(b[0][0]) || clusterBary(a) - clusterBary(b)
     );
     // Inside a cluster the blocks keep their barcyentre order, which is what
-    // drops a stitching block between the two families it joins.
+    // drops a stitching block between the two families it joins. Where two
+    // blocks want exactly the same spot — brothers and sisters hanging off
+    // the same parents — birth order settles it below, after the whole tree
+    // has been drawn and the cost of the move is known.
     for (const members of orderedClusters) {
       members.sort((a, b) => blockBary(a) - blockBary(b));
     }
@@ -608,6 +618,26 @@ export function layoutTree(data: TreeData): {
       if (!aFirst) block.reverse();
     }
 
+    // A caller may pin this row's order while it tries a swap out.
+    const pinned = rowOverrides.get(y);
+    if (pinned) {
+      const bySignature = new Map(
+        blocks.map((block) => [[...block].sort().join("|"), block] as const)
+      );
+      const reordered: string[][] = [];
+      for (const signature of pinned) {
+        const block = bySignature.get(signature);
+        if (block && !reordered.includes(block)) reordered.push(block);
+      }
+      for (const block of blocks) if (!reordered.includes(block)) reordered.push(block);
+      blocks.length = 0;
+      blocks.push(...reordered);
+    }
+    rowOrders.set(
+      y,
+      blocks.map((block) => [...block].sort().join("|"))
+    );
+
     // Read the finished order again: the side rule above may have flipped a
     // couple, and the x positions have to follow the names. Handing them out
     // in the order captured before the flip silently undoes every flip.
@@ -664,6 +694,97 @@ export function layoutTree(data: TreeData): {
   // ------------------------------------------------------------------
   resetPlace();
   sweep();
+
+  // ------------------------------------------------------------------
+  // Eldest first among brothers and sisters.
+  //
+  // Siblings hanging off the same parents share an ideal position, so the
+  // order they are written down in is a free choice — and a family reads
+  // best eldest first. It is not free of consequences, though: moving a
+  // brother past his sister also moves every line to his children. So each
+  // swap is tried on the real tree and kept only when it adds no crossings.
+  // That is what stops a twelve-child family from being torn up just to put
+  // the eldest at the left edge.
+  // ------------------------------------------------------------------
+  const countCrossings = () => {
+    const lines = data.parentEdges.filter(
+      (e) => place.has(e.parentId) && place.has(e.childId)
+    );
+    let total = 0;
+    for (let i = 0; i < lines.length; i++) {
+      for (let j = i + 1; j < lines.length; j++) {
+        const a = lines[i];
+        const b = lines[j];
+        if (a.parentId === b.parentId || a.childId === b.childId) continue;
+        if (a.parentId === b.childId || a.childId === b.parentId) continue;
+        const pa = place.get(a.parentId)!;
+        const pb = place.get(b.parentId)!;
+        const ca = place.get(a.childId)!;
+        const cb = place.get(b.childId)!;
+        if (pa.y >= ca.y || pb.y >= cb.y) continue;
+        const parentOrder = Math.sign(pa.x - pb.x);
+        const childOrder = Math.sign(ca.x - cb.x);
+        if (parentOrder !== 0 && childOrder !== 0 && parentOrder !== childOrder) total++;
+      }
+    }
+    return total;
+  };
+  const familyOfPerson = new Map<string, string>();
+  for (const [childId, parentIds] of parentsOfChild) {
+    if (parentIds.length > 0) {
+      familyOfPerson.set(childId, [...new Set(parentIds)].sort().join("+"));
+    }
+  }
+  const blockFamilies = (signature: string) =>
+    signature
+      .split("|")
+      .map((id) => familyOfPerson.get(id))
+      .filter((key): key is string => key !== undefined);
+  const blockBorn = (signature: string) => {
+    let earliest = Number.POSITIVE_INFINITY;
+    for (const id of signature.split("|")) {
+      const year = yearFromString(personById.get(id)?.birthDate ?? null);
+      if (year !== null) earliest = Math.min(earliest, Number(year));
+    }
+    return earliest;
+  };
+  let fewest = countCrossings();
+  for (let pass = 0; pass < 2; pass++) {
+    let improved = false;
+    for (const y of rows) {
+      const order = rowOrders.get(y);
+      if (!order || order.length < 2) continue;
+      for (let i = 0; i + 1 < order.length; i++) {
+        const left = order[i];
+        const right = order[i + 1];
+        const shared = blockFamilies(left).filter((key) => blockFamilies(right).includes(key));
+        if (shared.length === 0) continue;
+        const leftYear = blockBorn(left);
+        const rightYear = blockBorn(right);
+        if (!Number.isFinite(leftYear) || !Number.isFinite(rightYear)) continue;
+        if (leftYear <= rightYear) continue;
+        const swapped = [...order];
+        [swapped[i], swapped[i + 1]] = [swapped[i + 1], swapped[i]];
+        const before = rowOverrides.get(y);
+        rowOverrides.set(y, swapped);
+        sweep();
+        const got = countCrossings();
+        if (got <= fewest) {
+          fewest = got;
+          rowOrders.set(y, swapped);
+          improved = true;
+        } else {
+          // Put the row back the way the last accepted swap left it — an
+          // earlier pin in the same row must not be thrown away with this one.
+          if (before) rowOverrides.set(y, before);
+          else rowOverrides.delete(y);
+          sweep();
+        }
+      }
+    }
+    if (!improved) break;
+  }
+  rowOverrides.clear();
 
   const nodes: Node<PersonNodeData>[] = data.people.map((p) => {
     const fallback = g.node(p.id) as { x: number; y: number };

@@ -8,7 +8,8 @@
     "start": "next start -H 0.0.0.0 -p 3000",
     "db:seed": "tsx src/db/seed-cli.ts",
     "setup": "tsx src/db/setup-cli.ts",
-    "check:layout": "tsx scripts/check-layout.ts"
+    "check:layout": "tsx scripts/check-layout.ts",
+    "check:real-tree": "tsx scripts/check-real-tree.ts"
   },
   "dependencies": {
     "@dagrejs/dagre": "^1.1.8",
