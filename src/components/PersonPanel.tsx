@@ -6,6 +6,8 @@ import { fullName, initials, lifespan } from "@/lib/person-utils";
 import { formatDate } from "@/lib/dates";
 import DateField from "./DateField";
 import PhotoField from "./PhotoField";
+import PartnerStatusList from "./PartnerStatusList";
+import { partnershipStatusLabel } from "@/lib/partnership-status";
 import type { PersonRelations } from "@/lib/relations";
 
 interface Props {
@@ -64,11 +66,14 @@ export default function PersonPanel({ person, relations, onClose, onAddRelative,
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState(fieldsFrom(person));
 
+  // Keyed by id, not by object: saving a partner's status refreshes the tree,
+  // which hands us a fresh person object. Re-running this on every refresh
+  // used to close the edit panel mid-edit.
   useEffect(() => {
     setForm(fieldsFrom(person));
     setEditing(false);
     setError(null);
-  }, [person]);
+  }, [person.id]);
 
   const set =
     (key: keyof typeof form) =>
@@ -222,6 +227,10 @@ export default function PersonPanel({ person, relations, onClose, onAddRelative,
                 onChange={set("notes")}
               />
             </label>
+
+            {/* Status lives on the partnership, not on either person. Saving
+                here changes that one field and nothing else. */}
+            <PartnerStatusList partners={relations.partners} onSaved={onSaved} />
           </div>
 
           {error && <p className="text-xs font-medium text-rose-600">{error}</p>}
@@ -283,7 +292,10 @@ export default function PersonPanel({ person, relations, onClose, onAddRelative,
                 {relations.partners.map((p) => (
                   <li key={`s-${p.id}`}>
                     <span className="text-slate-400">Partner:</span> {p.name}
-                    {p.status && <span className="text-slate-400"> ({p.status})</span>}
+                    <span className="text-slate-400">
+                      {" "}
+                      ({partnershipStatusLabel(p.status, "en")})
+                    </span>
                   </li>
                 ))}
                 {relations.children.map((c) => (

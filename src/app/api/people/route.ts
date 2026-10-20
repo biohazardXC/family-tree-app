@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { parentEdges, partnerships, people } from "@/db/schema";
 import { linkSiblings, syncGroupParents } from "@/db/sibling-links";
 import type { RelationType } from "@/lib/types";
+import { normalizePartnershipStatus } from "@/lib/partnership-status";
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +54,20 @@ export async function POST(req: Request) {
           { status: 404 }
         );
       }
+      // A partner must be given a status deliberately. Without this check the
+      // row was written with NULL and the tree drew it as a marriage.
+      if (
+        body.relation.type === "partner" &&
+        !normalizePartnershipStatus(body.relation.partnershipStatus)
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "Choose a relationship status (married, partners, engaged, divorced or widowed).",
+          },
+          { status: 400 }
+        );
+      }
     }
 
     const [person] = await db
@@ -77,7 +92,7 @@ export async function POST(req: Request) {
         await db.insert(partnerships).values({
           aId: toId,
           bId: person.id,
-          status: clean(body.relation.partnershipStatus),
+          status: normalizePartnershipStatus(body.relation.partnershipStatus),
         });
       } else if (type === "child") {
         const adoption = ["adopted", "step", "foster"].includes(body.relation.adoption ?? "")

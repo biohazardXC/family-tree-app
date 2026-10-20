@@ -10,18 +10,23 @@ import {
   ReactFlowProvider,
   useReactFlow,
   type Edge,
+  type EdgeTypes,
   type Node,
   type NodeTypes,
 } from "@xyflow/react";
 import PersonNode from "./PersonNode";
 import PersonPanel from "./PersonPanel";
 import AddRelativeModal, { type ModalKind } from "./AddRelativeModal";
+import PartnershipEdge from "./PartnershipEdge";
+import PartnershipEditor from "./PartnershipEditor";
 import { layoutTree } from "@/lib/layout";
 import { summarizeRelations } from "@/lib/relations";
 import { fullName, lifespan } from "@/lib/person-utils";
 import type { PersonDTO, RelationType, TreeData } from "@/lib/types";
 
 const nodeTypes: NodeTypes = { person: PersonNode };
+/** Only the editor gets the tappable partner symbol; /share stays plain. */
+const edgeTypes: EdgeTypes = { partnership: PartnershipEdge };
 
 function miniMapColor(node: Node): string {
   const gender = (node.data as { person?: PersonDTO } | undefined)?.person?.gender;
@@ -35,6 +40,7 @@ function TreeCanvas() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedPartnershipId, setSelectedPartnershipId] = useState<string | null>(null);
   const [modal, setModal] = useState<{ kind: ModalKind; anchor: PersonDTO | null } | null>(null);
   const [query, setQuery] = useState("");
   const [busyDemo, setBusyDemo] = useState(false);
@@ -61,9 +67,41 @@ function TreeCanvas() {
     void fetchTree();
   }, [fetchTree]);
 
-  const { nodes, edges } = useMemo(
-    () => (data ? layoutTree(data) : { nodes: [] as Node[], edges: [] as Edge[] }),
-    [data]
+  const openPartnership = useCallback((id: string) => {
+    setSelectedId(null);
+    setSelectedPartnershipId(id);
+  }, []);
+
+  const { nodes, edges } = useMemo(() => {
+    if (!data) return { nodes: [] as Node[], edges: [] as Edge[] };
+    const laidOut = layoutTree(data);
+    const byId = new Map(data.people.map((p) => [p.id, p]));
+    // Swap each partner line for the editor's version, which draws its symbol
+    // as a proper 44px button. Everything else is left exactly as laid out.
+    const editableEdges = laidOut.edges.map((edge) => {
+      const partnershipId = (edge.data as { partnershipId?: string } | undefined)
+        ?.partnershipId;
+      if (!partnershipId) return edge;
+      const partnership = data.partnerships.find((p) => p.id === partnershipId);
+      const a = partnership ? byId.get(partnership.aId) : undefined;
+      const b = partnership ? byId.get(partnership.bId) : undefined;
+      return {
+        ...edge,
+        type: "partnership",
+        data: {
+          ...edge.data,
+          aName: a ? fullName(a) : "Someone",
+          bName: b ? fullName(b) : "someone",
+          onOpen: openPartnership,
+        },
+      };
+    });
+    return { nodes: laidOut.nodes, edges: editableEdges };
+  }, [data, openPartnership]);
+
+  const selectedPartnership = useMemo(
+    () => data?.partnerships.find((p) => p.id === selectedPartnershipId) ?? null,
+    [data, selectedPartnershipId]
   );
 
   const selectedPerson = useMemo(
@@ -196,8 +234,20 @@ function TreeCanvas() {
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
-        onNodeClick={(_, node) => setSelectedId(node.id)}
-        onPaneClick={() => setSelectedId(null)}
+        edgeTypes={edgeTypes}
+        onNodeClick={(_, node) => {
+          setSelectedPartnershipId(null);
+          setSelectedId(node.id);
+        }}
+        onEdgeClick={(_, edge) => {
+          const partnershipId = (edge.data as { partnershipId?: string } | undefined)
+            ?.partnershipId;
+          if (partnershipId) openPartnership(partnershipId);
+        }}
+        onPaneClick={() => {
+          setSelectedId(null);
+          setSelectedPartnershipId(null);
+        }}
         minZoom={0.15}
         maxZoom={2}
         nodesConnectable={false}
@@ -321,6 +371,22 @@ function TreeCanvas() {
           onDeleted={handleDeleted}
         />
       )}
+
+      {/* Relationship status panel — opened by the symbol on a couple's line */}
+      {selectedPartnership &&
+        (() => {
+          const a = data?.people.find((p) => p.id === selectedPartnership.aId);
+          const b = data?.people.find((p) => p.id === selectedPartnership.bId);
+          return (
+            <PartnershipEditor
+              partnership={selectedPartnership}
+              aName={a ? fullName(a) : "Someone"}
+              bName={b ? fullName(b) : "someone"}
+              onClose={() => setSelectedPartnershipId(null)}
+              onSaved={handleSaved}
+            />
+          );
+        })()}
 
       {/* Modal */}
       {modal && (

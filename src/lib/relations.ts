@@ -9,7 +9,7 @@ export interface RelatedPerson {
 
 export interface PersonRelations {
   parents: RelatedPerson[];
-  partners: { id: string; name: string; status: string | null }[];
+  partners: { id: string; name: string; status: string | null; partnershipId: string }[];
   children: RelatedPerson[];
 }
 
@@ -38,7 +38,13 @@ export function summarizeRelations(personId: string, data: TreeData): PersonRela
     else if (p.bId === personId) otherId = p.aId;
     if (otherId) {
       const other = byId.get(otherId);
-      if (other) partners.push({ id: other.id, name: fullName(other), status: p.status });
+      if (other)
+        partners.push({
+          id: other.id,
+          name: fullName(other),
+          status: p.status,
+          partnershipId: p.id,
+        });
     }
   }
 

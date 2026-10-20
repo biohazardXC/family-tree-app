@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { parentEdges, partnerships, people } from "@/db/schema";
 import { linkSiblings, syncGroupParents } from "@/db/sibling-links";
 import type { RelationType } from "@/lib/types";
+import { normalizePartnershipStatus } from "@/lib/partnership-status";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +50,16 @@ export async function POST(req: Request) {
     }
 
     if (type === "partner") {
+      const status = normalizePartnershipStatus(body.partnershipStatus);
+      if (!status) {
+        return NextResponse.json(
+          {
+            error:
+              "Choose a relationship status (married, partners, engaged, divorced or widowed).",
+          },
+          { status: 400 }
+        );
+      }
       const existing = await db
         .select()
         .from(partnerships)
@@ -62,7 +73,7 @@ export async function POST(req: Request) {
         await db.insert(partnerships).values({
           aId: toId,
           bId: personId,
-          status: clean(body.partnershipStatus),
+          status,
         });
       }
     } else if (type === "child" || type === "parent") {

@@ -55,7 +55,7 @@ const emptyDraft = (): Draft => ({
 const emptyEntry = (): Entry => ({
   draft: emptyDraft(),
   adoption: "",
-  partnershipStatus: "married",
+  partnershipStatus: "",
   otherParent: "",
   linkedTo: null,
   linkedName: null,
@@ -385,6 +385,14 @@ export default function InviteWizard({ token }: { token: string }) {
   }, [token]);
 
   const submit = useCallback(async () => {
+    const missingStatus = partners.some(
+      (sp) => sp.draft.firstName.trim() && !sp.partnershipStatus
+    );
+    if (missingStatus) {
+      setError(t.errNeedPartnerStatus);
+      setStep(1);
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
@@ -581,6 +589,11 @@ export default function InviteWizard({ token }: { token: string }) {
     for (let i = 0; i < partners.length; i++) {
       err = check(t.labelPartnerN(i + 1), partners[i]);
       if (err) return err;
+      // A partner's status is a choice, not an assumption. Without this the
+      // relationship arrived at the review screen already "married".
+      if (partners[i].draft.firstName.trim() && !partners[i].partnershipStatus) {
+        return t.errNeedPartnerStatus;
+      }
     }
     for (let i = 0; i < parents.length; i++) {
       err = check(t.labelParentN(i + 1), parents[i]);
@@ -680,6 +693,7 @@ export default function InviteWizard({ token }: { token: string }) {
                       {([
                         ["married", t.statusMarried],
                         ["partners", t.statusPartners],
+                        ["engaged", t.statusEngaged],
                         ["divorced", t.statusDivorced],
                         ["widowed", t.statusWidowed],
                       ] as [string, string][]).map(([st, stLabel]) => (
